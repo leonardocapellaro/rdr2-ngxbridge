@@ -1,9 +1,9 @@
 [GAME   ] == mock game: RDR2 NGX loader simulation ==
 [OPTI-MOCK] loaded
 [MOR3A-MOCK] loaded
-[GAME   ] modules: opti=00006ffffa910000 mor3a=00006ffffa8a0000 bridge=00006ffffa550000
+[GAME   ] modules: opti=00006ffffa910000 mor3a=00006ffffc420000 bridge=00006ffffc0d0000
 [MOR3A-MOCK] gate installed (game IAT GetProcAddress redirect); waiting for NVSDK_NGX_VULKAN_* resolutions
-[GAME   ] game IAT slot addr=000000014000f1f8 value=00006ffffa8a1500 (mock_mor3a base=00006ffffa8a0000 - gate lives inside it)
+[GAME   ] game IAT slot addr=000000014000f1f8 value=00006ffffc421500 (mock_mor3a base=00006ffffc420000 - gate lives inside it)
 [MOR3A-MOCK] gateIAT #1 m=00006ffffa910000 name=NVSDK_NGX_VULKAN_AllocateParameters
 [MOR3A-MOCK] gateIAT #2 m=00006ffffa910000 name=NVSDK_NGX_VULKAN_CreateFeature
 [MOR3A-MOCK] gate name=NVSDK_NGX_VULKAN_CreateFeature provider='Z:\home\lcapellaro\Documentos\Projects\fix_fg_arc_rdr2\case\ngxbridge\build\selftest\nvngx.dll'
@@ -11,26 +11,26 @@
 [MOR3A-MOCK] gateIAT #3 m=00006ffffa910000 name=NVSDK_NGX_VULKAN_EvaluateFeature
 [MOR3A-MOCK] gate name=NVSDK_NGX_VULKAN_EvaluateFeature provider='Z:\home\lcapellaro\Documentos\Projects\fix_fg_arc_rdr2\case\ngxbridge\build\selftest\nvngx.dll'
 [MOR3A-MOCK] RESULT: ACCEPT - installing input-capture wrapper
-[GAME   ] resolved alloc=00006ffffa911ee0 create=00006ffffa8a16b0 eval=00006ffffa8a1750
+[GAME   ] resolved alloc=00006ffffa911ee0 create=00006ffffc4216b0 eval=00006ffffc421750
 [OPTI-MOCK] AllocateParameters -> param=00000000007c5370
 [MOR3A-MOCK] gateIAT #4 m=00006ffffa910000 name=mock_dump
 [OPTI-MOCK] dump(obj=00000000007c5370) vptr=00006ffffa942140 (off=+0x32140)
-[OPTI-MOCK]   slot[ 0]=00006ffffa552d10 (external)
-[OPTI-MOCK]   slot[ 1]=00006ffffa552e30 (external)
-[OPTI-MOCK]   slot[ 2]=00006ffffa552f60 (external)
-[OPTI-MOCK]   slot[ 3]=00006ffffa5530a0 (external)
-[OPTI-MOCK]   slot[ 4]=00006ffffa5531c0 (external)
-[OPTI-MOCK]   slot[ 5]=00006ffffa5532e0 (external)
-[OPTI-MOCK]   slot[ 6]=00006ffffa553400 (external)
-[OPTI-MOCK]   slot[ 7]=00006ffffa553520 (external)
-[OPTI-MOCK]   slot[ 8]=00006ffffa553a00 (external)
-[OPTI-MOCK]   slot[ 9]=00006ffffa553640 (external)
-[OPTI-MOCK]   slot[10]=00006ffffa553730 (external)
-[OPTI-MOCK]   slot[11]=00006ffffa553820 (external)
-[OPTI-MOCK]   slot[12]=00006ffffa553910 (external)
-[OPTI-MOCK]   slot[13]=00006ffffa5515e0 (external)
-[OPTI-MOCK]   slot[14]=00006ffffa5515f0 (external)
-[OPTI-MOCK]   slot[15]=00006ffffa551600 (external)
+[OPTI-MOCK]   slot[ 0]=00006ffffc0d2d10 (external)
+[OPTI-MOCK]   slot[ 1]=00006ffffc0d2e30 (external)
+[OPTI-MOCK]   slot[ 2]=00006ffffc0d2f60 (external)
+[OPTI-MOCK]   slot[ 3]=00006ffffc0d30a0 (external)
+[OPTI-MOCK]   slot[ 4]=00006ffffc0d31c0 (external)
+[OPTI-MOCK]   slot[ 5]=00006ffffc0d32e0 (external)
+[OPTI-MOCK]   slot[ 6]=00006ffffc0d3400 (external)
+[OPTI-MOCK]   slot[ 7]=00006ffffc0d3520 (external)
+[OPTI-MOCK]   slot[ 8]=00006ffffc0d3a00 (external)
+[OPTI-MOCK]   slot[ 9]=00006ffffc0d3640 (external)
+[OPTI-MOCK]   slot[10]=00006ffffc0d3730 (external)
+[OPTI-MOCK]   slot[11]=00006ffffc0d3820 (external)
+[OPTI-MOCK]   slot[12]=00006ffffc0d3910 (external)
+[OPTI-MOCK]   slot[13]=00006ffffc0d15e0 (external)
+[OPTI-MOCK]   slot[14]=00006ffffc0d15f0 (external)
+[OPTI-MOCK]   slot[15]=00006ffffc0d1600 (external)
 [MOR3A-MOCK] CreateFeature: SR flags result=1 value=1 MIRROR-CROSS-TYPE-OK
 [OPTI-MOCK] CreateFeature(feature=1 params=00000000007c5370) - upscaling implementation would run here
 [GAME   ] CreateFeature result=1

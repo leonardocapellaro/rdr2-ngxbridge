@@ -40,5 +40,9 @@ $GXX $STD -static -o $OUT/mock_game.exe mock/mock_game.cpp
 # --- sanity: the .asi must be a plain DLL with no exotic imports ---
 $OBJDUMP -p $OUT/zz_ngxbridge.asi | grep -E '^File Format|DLL Name' | sort -u > $OUT/zz_ngxbridge.imports.txt
 
+# --- native unit tests (mirror_core logic, runs on the dev machine) ---
+g++ -O2 -std=c++17 -Isrc tests/test_mirror.cpp src/mirror_core.cpp -o $OUT/test_mirror -pthread
+$OUT/test_mirror
+
 echo "BUILD OK"
 ls -la $OUT/*.asi $OUT/*.dll $OUT/*.exe 2>/dev/null
