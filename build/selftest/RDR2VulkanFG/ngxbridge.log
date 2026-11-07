@@ -1,0 +1,21 @@
+[18:32:16.012] == ngxbridge 0.1.0 == enabled=1 spoof=1 mirror=1 target=mock_optiscaler.dll hints=2
+[18:32:16.013] target found: Z:\home\lcapellaro\Documentos\Projects\fix_fg_arc_rdr2\case\ngxbridge\build\selftest\mock_optiscaler.dll at 00006ffffa910000
+[18:32:16.013] hook GetModuleFileNameW: kernel32=00006fffff9ce7c4:1 kernelbase=00006fffff34cea0:1
+[18:32:16.013] hook GetModuleFileNameA: kernel32=00006fffff9ce7ac:1 kernelbase=00006fffff34c940:1
+[18:32:16.013] hook observer: ntdll!LdrGetProcedureAddress=00006fffffbb82c0 -> 0
+[18:32:16.013] mirror: export NVSDK_NGX_D3D12_AllocateParameters not present in target
+[18:32:16.013] mirror: export NVSDK_NGX_D3D12_GetParameters not present in target
+[18:32:16.013] mirror: export NVSDK_NGX_D3D11_AllocateParameters not present in target
+[18:32:16.013] mirror: export NVSDK_NGX_D3D11_GetParameters not present in target
+[18:32:16.013] mirror: 2/6 parameter-factory export hooks created
+[18:32:16.016] armed: spoof on kernel32+kernelbase, observer on ntdll resolver, factory hooks on target exports
+[18:32:18.015] resolved 'NVSDK_NGX_VULKAN_AllocateParameters' from the OptiScaler handle by kernel32.dll -> 00006ffffa911ee0
+[18:32:18.015] resolved 'NVSDK_NGX_VULKAN_CreateFeature' from the OptiScaler handle by kernel32.dll -> 00006ffffa911fd0
+[18:32:18.015] GPFN[W] hook fired (m=00006ffffa910000)
+[18:32:18.015] spoofed provider path for capture module: Z:\home\lcapellaro\Documentos\Projects\fix_fg_arc_rdr2\case\ngxbridge\build\selftest\nvngx.dll
+[18:32:18.015] resolved 'NVSDK_NGX_VULKAN_EvaluateFeature' from the OptiScaler handle by kernel32.dll -> 00006ffffa912040
+[18:32:18.015] GPFN[W] hook fired (m=00006ffffa910000)
+[18:32:18.015] spoofed provider path for capture module: Z:\home\lcapellaro\Documentos\Projects\fix_fg_arc_rdr2\case\ngxbridge\build\selftest\nvngx.dll
+[18:32:18.015] intercepted NVSDK_NGX_VULKAN_AllocateParameters (result=1 obj=00000000007c5370)
+[18:32:18.015] mirror: vtable 00006ffffa942140 patched (16 typed slots) - cross-type reads now answered
+[18:32:18.015] mirror: coerced typed answer for 'DLSS.Feature.Create.Flags'
