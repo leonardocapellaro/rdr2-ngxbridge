@@ -92,6 +92,19 @@ int main()
         Q("frame %d evaluate result=%d", frame, r);
     }
 
+    // Stale guard: the game's own Reset() (REAL vtable slot 16) empties the
+    // provider's storage. The mirror's copy MUST be dropped with it - a later
+    // cross-type read must fail again, never answer with the pre-reset value
+    // ("never treat old frames as valid"). If the bridge forgot this, this
+    // line would print STALE-LEAK.
+    typedef int (*ResetTP)(void*);
+    typedef int (*GetUIP)(void*, const char*, unsigned*);
+    int rres = ((ResetTP)vt[16])(params);
+    unsigned flags2 = 0xFFFFFFFFu;
+    int r2 = ((GetUIP)vt[11])(params, "DLSS.Feature.Create.Flags", &flags2);
+    Q("post-Reset provider=%d flags read result=%d %s", rres, r2,
+      (r2 == 0) ? "STALE-GUARD-OK" : "STALE-LEAK!!");
+
     Sleep(300);
     Q("== mock game done ==");
     Sleep(200); // let other threads flush their logs

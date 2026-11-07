@@ -43,7 +43,8 @@ também sem bloqueio).
 1. Jogo abre com Vulkan + upscale normalmente (o upscaling **não** muda);
 2. Log da ponte em `RDR2VulkanFG\ngxbridge.log` deve ter, na ordem:
    - `spoofed provider path for capture module: ...\nvngx.dll` (1-2×);
-   - `resolved 'NVSDK_NGX_VULKAN_...' from the OptiScaler handle by kernel32.dll`;
+   - `resolved 'NVSDK_NGX_VULKAN_...' from the OptiScaler handle by <módulo>` — o `<módulo>` é o primeiro componente não-sistema na pilha de quem pediu o símbolo (tipicamente `RDR2VulkanFG.asi`, pois o hook global dele encaminha a chamada; ver DIAGNOSIS §6.1);
+   - `intercepted NVSDK_NGX_VULKAN_AllocateParameters ... by <exe do jogo>` — o jogo criou o objeto de parâmetros;
    - `mirror: ... parameter-factory export hooks created` (6/6 no OptiScaler real) e
      `mirror: vtable ... patched (16 typed slots)`;
 3. Log do RDR2VulkanFG (o dele, na mesma pasta) deve passar a ter o que

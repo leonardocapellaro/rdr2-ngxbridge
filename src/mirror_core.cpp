@@ -99,7 +99,9 @@ void MirrorCore::NoteSet(void* self, const char* key, ValueKind kind, uint64_t r
 {
     if (!self || !key) return;
     std::lock_guard<std::mutex> lk(mu_);
-    if (++sets_ == 0) return; // saturation only; counter wraps harmlessly
+    ++sets_; // stats only; on wrap it simply stops growing in display -
+             // the store itself must NEVER be skipped (one dropped Set every
+             // 4 billion calls was a real, if rare, missed record).
     objs_[self][key] = MirrorValue{kind, raw};
 }
 

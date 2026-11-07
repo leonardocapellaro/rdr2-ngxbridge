@@ -15,6 +15,7 @@ echo "----- bridge log -----"
 echo "----- verdict -----"
 if grep -q "OBSERVER-OK" stdout.log && grep -q "ACCEPT - installing" stdout.log \
    && grep -q "MIRROR-CROSS-TYPE-OK" stdout.log \
+   && grep -q "STALE-GUARD-OK" stdout.log \
    && grep -q "spoofed provider path" RDR2VulkanFG/ngxbridge.log \
    && grep -q "vtable .* patched" RDR2VulkanFG/ngxbridge.log; then
     echo "SELFTEST: PASS"

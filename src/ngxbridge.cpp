@@ -32,7 +32,9 @@
 //  * The mirror records every typed Set on the parameter objects OptiScaler
 //    creates and answers typed Get calls (only when OptiScaler's own storage
 //    has no answer) with a safely coerced value, so Mor3a's fixed vtable-slot
-//    reads find depth/MV regardless of how the game's loader stored them.
+//    reads find depth/MV regardless of how the game's loader stored them. The
+//    Reset() slot is patched too: a provider Reset drops the mirror's memory,
+//    so no pre-reset value can ever answer as if it were the current frame.
 // No file named nvngx.dll is created, no forwarder DLL, no LdrLoadDll hook.
 // Mor3a's and OptiScaler's binaries are untouched.
 #define WIN32_LEAN_AND_MEAN
@@ -48,7 +50,7 @@
 #include <string>
 #include <vector>
 
-#define NGXBRIDGE_VERSION "0.1.0"
+#define NGXBRIDGE_VERSION "0.1.1"
 #define NGX_SUCCESS 0x00000001
 
 // ---------------------------------------------------------------- logging ---
@@ -90,6 +92,41 @@ static void LogLine(const char* fmt, ...)
 
 // Throttled logging helper: first 3 occurrences + every 600th.
 #define LOGT(ctr, ...) do { if (++(ctr) <= 3 || (ctr) % 600 == 1) LogLine(__VA_ARGS__); } while (0)
+
+// Lock-free, allocation-free log queue for code that may run while the LOADER
+// LOCK is held (GetModuleFileNameW is called by the loader itself, and
+// ntdll!LdrGetProcedureAddress runs under that lock on every DLL load).
+// fprintf/fflush allocate from the heap there: a concurrent DLL load holding
+// the heap and waiting for the loader lock inverts with us waiting for the
+// heap under the loader lock - the classic startup deadlock. Producers here
+// only touch preallocated static buffers and vsnprintf (no heap), so nothing
+// under the loader lock can block on us; a normal thread drains to the file.
+struct LogRec { char msg[256]; };
+static LogRec g_ring[128];
+static volatile LONG g_ringW = 0;   // total produced
+static LONG g_ringT = 0;            // total consumed (flusher thread only)
+static void LogQueued(const char* fmt, ...)
+{
+    LONG w = InterlockedIncrement(&g_ringW);
+    LogRec* rec = &g_ring[(w - 1) & 127];
+    va_list ap; va_start(ap, fmt);
+    vsnprintf(rec->msg, sizeof rec->msg, fmt, ap);
+    va_end(ap);
+}
+#define LOGQT(ctr, ...) do { if (++(ctr) <= 3 || (ctr) % 600 == 1) LogQueued(__VA_ARGS__); } while (0)
+
+static void DrainRing()
+{
+    LONG w = g_ringW;                 // snapshot; producers only ever append
+    if (w - g_ringT > 128) g_ringT = w - 128; // queue wrapped: drop stale slots, count in message below
+    while (g_ringT < w) {
+        char local[256];
+        const char* src = g_ring[g_ringT & 127].msg;
+        memcpy(local, src, 255); local[255] = 0; // copy out: producer may reuse the slot
+        ++g_ringT;
+        LogLine("%s", local);
+    }
+}
 
 // ------------------------------------------------------------------ config ---
 struct Cfg {
@@ -172,6 +209,18 @@ static bool CallerMatchesHints(void* ra)
     return false;
 }
 
+static void ModuleNameOf(HMODULE m, wchar_t* out, size_t cap)
+{
+    out[0] = 0;
+    if (!m) return;
+    wchar_t path[MAX_PATH]{};
+    if ((pGPFNWOrig[1] ? pGPFNWOrig[1] : pGPFNWOrig[0])(m, path, MAX_PATH) == 0) return;
+    const wchar_t* base = wcsrchr(path, L'\\');
+    base = base ? base + 1 : path;
+    wcsncpy(out, base, cap - 1);
+    out[cap - 1] = 0;
+}
+
 static void ModuleBaseOf(void* addr, wchar_t* out, size_t cap)
 {
     out[0] = 0;
@@ -179,12 +228,42 @@ static void ModuleBaseOf(void* addr, wchar_t* out, size_t cap)
     HMODULE m = nullptr;
     if (!pGetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
                              (LPCWSTR)addr, &m) || !m) return;
-    wchar_t path[MAX_PATH]{};
-    if ((pGPFNWOrig[1] ? pGPFNWOrig[1] : pGPFNWOrig[0])(m, path, MAX_PATH) == 0) return;
-    const wchar_t* base = wcsrchr(path, L'\\');
-    base = base ? base + 1 : path;
-    wcsncpy(out, base, cap - 1);
-    out[cap - 1] = 0;
+    ModuleNameOf(m, out, cap);
+}
+
+// Who really asked for a symbol? Inside ntdll!LdrGetProcedureAddress the
+// plain return address is ALWAYS kernel32/kernelbase's own GetProcAddress
+// implementation (the API always funnels through it), never the caller that
+// mattered - the shipped 0.1.0 observer therefore always logged the wrong
+// module. Walk the stack instead: skip system modules (ntdll/kernel32/
+// kernelbase) and frames that belong to no module (hook trampolines, which
+// are heap allocations - e.g. Mor3a's Detours), and report the first frame
+// that does. Trampolines being skipped is informative too: an attribution of
+// RDR2VulkanFG.asi means the resolution came through Mor3a's own hook.
+typedef WORD (WINAPI* RtlCSBTP)(ULONG skip, ULONG capture, PVOID* frames, PULONG hash);
+static RtlCSBTP pRtlCSBT = nullptr;
+static HMODULE g_ntdll = nullptr, g_k32 = nullptr, g_kb = nullptr, g_self = nullptr;
+
+static void FirstExternalCaller(wchar_t* out, size_t cap)
+{
+    out[0] = 0;
+    // Deliberately no __builtin_return_address(1) fallback: reading frame 1
+    // without unwind guarantees can dereference garbage. Without the walker
+    // we simply omit attribution (logged as "?").
+    if (!pRtlCSBT || !pGetModuleHandleExW) return;
+    PVOID frames[24];
+    // skip=1: drop this function's own frame; the loop below still skips our
+    // hook body (g_self), system forwarders and hook trampolines.
+    WORD n = pRtlCSBT(1, 24, frames, nullptr);
+    for (WORD i = 0; i < n; ++i) {
+        HMODULE m = nullptr;
+        if (!pGetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                                 (LPCWSTR)frames[i], &m) || !m)
+            continue; // trampoline / anonymous executable region
+        if (m == g_ntdll || m == g_k32 || m == g_kb || m == g_self) continue;
+        ModuleNameOf(m, out, cap);
+        return;
+    }
 }
 
 // loader-level resolver signature (ntdll!LdrGetProcedureAddress). The bridge
@@ -196,7 +275,7 @@ static LdrGetProcTP pLdrOrig = nullptr;  // real resolver, captured by MH_Create
 // ------------------------------------------------- parameter vtable mirror ---
 static MirrorCore g_core;
 static CRITICAL_SECTION g_mirrorCs;
-struct SavedVt { void* orig[SLOT_COUNT]; };
+struct SavedVt { void* orig[SLOTS_TOTAL]; };
 static std::vector<std::pair<void*, SavedVt>> g_vtables; // patched vtables
 
 static void* OrigSlot(void* self, int slot)
@@ -227,6 +306,18 @@ typedef int (*SlotGetULL)(void*, const char*, unsigned long long*);
 static unsigned g_coerced = 0, g_coerceMiss = 0;
 
 static uint64_t CoercePtr(void* p) { return (uint64_t)(uintptr_t)p; }
+
+// Slot 16 = Reset(). Patched on purpose: after a provider Reset the object's
+// storage is empty, and the mirror's copy of the old values MUST be dropped
+// with it - answering a later Get with a pre-reset (possibly already freed)
+// Vulkan resource would violate the "never use stale inputs" rule.
+typedef int (*SlotResetTP)(void*);
+extern "C" int StubReset(void* self) {
+    auto f = (SlotResetTP)OrigSlot(self, SLOT_RESET);
+    int r = f ? f(self) : 0;
+    if (r == NGX_SUCCESS) g_core.ForgetObject(self);
+    return r;
+}
 
 // Stubs are keyed by the REAL provider layout (see mirror_core.h). Each Set
 // stub records what it wrote into the typed side-table, then runs the
@@ -339,22 +430,31 @@ static void MirrorEnsureObject(void* obj, bool isNew)
     if (!g_cfg.mirror || !obj) return;
     void* vt = *(void**)obj;
     if (!vt) return;
-    {
-        bool found = false;
-        EnterCriticalSection(&g_mirrorCs);
-        for (auto& kv : g_vtables) if (kv.first == vt) { found = true; break; }
+    // The found-check, the original-slot capture, the in-place vtable write
+    // and the registry push MUST be one atomic section: two threads creating
+    // the first objects of the same parameter class concurrently could
+    // otherwise double-patch and record our own stub pointers as the
+    // "original" slots - a self-call loop (stack overflow) or a silently
+    // dropped provider call. With the lock held across all of it, any stub
+    // that fires mid-patch from another thread simply blocks in OrigSlot
+    // until the registry is complete.
+    EnterCriticalSection(&g_mirrorCs);
+    bool found = false;
+    for (auto& kv : g_vtables) if (kv.first == vt) { found = true; break; }
+    if (found) {
         LeaveCriticalSection(&g_mirrorCs);
-        if (found) { if (isNew) g_core.ForgetObject(obj); return; }
+        if (isNew) g_core.ForgetObject(obj);
+        return;
     }
-    // patch this parameter class's vtable once, in place
     DWORD old;
-    if (!VirtualProtect(vt, SLOT_COUNT * sizeof(void*), PAGE_READWRITE, &old)) {
+    if (!VirtualProtect(vt, SLOTS_TOTAL * sizeof(void*), PAGE_READWRITE, &old)) {
+        LeaveCriticalSection(&g_mirrorCs);
         LogLine("mirror: VirtualProtect on vtable %p failed (%lu) - mirror disabled", vt, GetLastError());
         return;
     }
     void** v = (void**)vt;
     SavedVt saved;
-    for (int i = 0; i < SLOT_COUNT; ++i) saved.orig[i] = v[i];
+    for (int i = 0; i < SLOTS_TOTAL; ++i) saved.orig[i] = v[i];
     v[SLOT_SET_VOIDPTR] = (void*)&StubSetVoid;   v[SLOT_SET_D3D12] = (void*)&StubSetD3D12;
     v[SLOT_SET_D3D11]   = (void*)&StubSetD3D11;  v[SLOT_SET_I]     = (void*)&StubSetI;
     v[SLOT_SET_UI]      = (void*)&StubSetUI;     v[SLOT_SET_D]     = (void*)&StubSetD;
@@ -363,12 +463,13 @@ static void MirrorEnsureObject(void* obj, bool isNew)
     v[SLOT_GET_D3D11]   = (void*)&StubGetD3D11;  v[SLOT_GET_I]     = (void*)&StubGetI;
     v[SLOT_GET_UI]      = (void*)&StubGetUI;     v[SLOT_GET_D]     = (void*)&StubGetD;
     v[SLOT_GET_F]       = (void*)&StubGetF;      v[SLOT_GET_ULL]   = (void*)&StubGetULL;
-    VirtualProtect(vt, SLOT_COUNT * sizeof(void*), old, &old);
-    EnterCriticalSection(&g_mirrorCs);
+    v[SLOT_RESET]       = (void*)&StubReset;
+    VirtualProtect(vt, SLOTS_TOTAL * sizeof(void*), old, &old);
     g_vtables.push_back({ vt, saved });
     LeaveCriticalSection(&g_mirrorCs);
     if (isNew) g_core.ForgetObject(obj);
-    LogLine("mirror: vtable %p patched (%d typed slots) - cross-type reads now answered", vt, SLOT_COUNT);
+    LogLine("mirror: vtable %p patched (%d typed slots + Reset) - cross-type reads now answered, stale-after-reset guarded",
+            vt, SLOT_COUNT);
 }
 
 // ------------------------------------------------ GetProcAddress observer ---
@@ -401,7 +502,12 @@ template <int IDX, bool NEWOBJ> static int HookParamFactory(void** out)
 {
     AllocTP f = pAllocOrig[IDX];
     int r = f ? f(out) : 0;
-    LOGT(g_allocs[IDX], "intercepted %s (result=%d obj=%p)", kNames[IDX], r, out ? *out : nullptr);
+    if (++g_allocs[IDX] <= 3 || g_allocs[IDX] % 600 == 1) {
+        wchar_t cbase[64]{};
+        FirstExternalCaller(cbase, 64);   // game-thread context: direct log is fine
+        LogLine("intercepted %s (result=%d obj=%p) by %ls",
+                kNames[IDX], r, out ? *out : nullptr, cbase[0] ? cbase : L"?");
+    }
     if (r == NGX_SUCCESS && out && *out) MirrorEnsureObject(*out, NEWOBJ);
     return r;
 }
@@ -427,10 +533,13 @@ static LONG NTAPI Hook_LdrGPA(PVOID baseDll, MyANSI* name, ULONG ordinal, PVOID*
     int idx = NameIndex(name->Buffer);
     if (idx < 0) return st;
 
-    wchar_t cbase[64]{};
-    ModuleBaseOf(__builtin_extract_return_addr(__builtin_return_address(0)), cbase, 64);
-    LOGT(g_seen[idx], "resolved '%s' from the OptiScaler handle by %ls -> %p",
-         name->Buffer, cbase[0] ? cbase : L"?", *proc);
+    // queued, never logged here: we run under the loader lock (see LogQueued)
+    if (++g_seen[idx] <= 3 || g_seen[idx] % 600 == 1) {
+        wchar_t cbase[64]{};
+        FirstExternalCaller(cbase, 64);
+        LogQueued("resolved '%s' from the OptiScaler handle by %ls -> %p",
+                  name->Buffer, cbase[0] ? cbase : L"?", *proc);
+    }
     return st;
 }
 
@@ -443,9 +552,11 @@ static unsigned g_gpfCalls = 0;
 
 static DWORD GPFNWImpl(HMODULE m, LPWSTR buf, DWORD size, GPFNWTP call, void* caller)
 {
-    LOGT(g_gpfCalls, "GPFN[W] hook fired (m=%p)", (void*)m);
+    // GPFN is called by the loader too (under the loader lock): every log
+    // inside this hook must go through the queue, never straight to the file.
+    LOGQT(g_gpfCalls, "GPFN[W] hook fired (m=%p)", (void*)m);
     if (SpoofEligible(m, caller)) {
-        LOGT(g_spoofs, "spoofed provider path for capture module: %ls", g_fakePath);
+        LOGQT(g_spoofs, "spoofed provider path for capture module: %ls", g_fakePath);
         DWORD need = (DWORD)wcslen(g_fakePath);
         if (size > need) { wcscpy(buf, g_fakePath); return need; }
         if (size) buf[0] = 0;
@@ -463,6 +574,7 @@ static DWORD WINAPI Hook_GPFNW_KB(HMODULE m, LPWSTR b, DWORD s) {
 static DWORD GPFNAImpl(HMODULE m, LPSTR buf, DWORD size, GPFNATP call, void* caller)
 {
     if (SpoofEligible(m, caller)) {
+        LOGQT(g_spoofs, "spoofed provider path (A) for capture module: %ls", g_fakePath);
         int n = WideCharToMultiByte(CP_ACP, 0, g_fakePath, -1, buf, (int)size, NULL, NULL);
         return n > 0 ? DWORD(n - 1) : 0;
     }
@@ -495,7 +607,11 @@ static bool alreadyHooked(void* a)
     return false;
 }
 
-// returns true when the kernel32 slot got hooked (the mandatory one)
+// Mandatory slot = kernel32. Mor3a links GetModuleFileNameW through kernel32;
+// if only the kernelbase copy is hooked, kernel32's forwarder tail-jumps into
+// our kernelbase hook with a return address INSIDE kernel32 (a system module,
+// never matching CallerHints) -> the spoof silently never fires for Mor3a.
+// So callers only trust success on kernel32; kernelbase is defense in depth.
 static bool HookBoth(HMODULE k32, HMODULE kb, const char* fn, void* d32, void* dkb,
                      void** o32, void** okb, const char* label)
 {
@@ -521,7 +637,7 @@ static bool HookBoth(HMODULE k32, HMODULE kb, const char* fn, void* d32, void* d
     if (ok32) g_hooked.push_back(t32);
     if (okkb) g_hooked.push_back(tkb);
     LogLine("hook %s: kernel32=%p:%d kernelbase=%p:%d", fn, t32, (int)ok32, tkb, (int)okkb);
-    return ok32 || okkb;
+    return ok32;
 }
 
 static void InstallHooks()
@@ -529,7 +645,10 @@ static void InstallHooks()
     HMODULE k32 = GetModuleHandleW(L"kernel32.dll");
     HMODULE kb  = GetModuleHandleW(L"kernelbase.dll");
     HMODULE ntdll = GetModuleHandleW(L"ntdll.dll");
+    g_k32 = k32; g_kb = kb; g_ntdll = ntdll;
     pGetModuleHandleExW = (GetModuleHandleExTP)GetProcAddress(k32, "GetModuleHandleExW");
+    pRtlCSBT = (RtlCSBTP)GetProcAddress(ntdll, "RtlCaptureStackBackTrace");
+    if (!pRtlCSBT) LogLine("note: RtlCaptureStackBackTrace unavailable - caller attribution degraded");
 
     MH_STATUS st = MH_Initialize();
     if (st != MH_OK) { LogLine("fatal: MH_Initialize=%d", (int)st); return; }
@@ -581,32 +700,57 @@ static void InstallHooks()
     LogLine("mirror: %d/6 parameter-factory export hooks created", hooked);
     if (g_cfg.mirror && !hooked) LogLine("warning: mirror has no installation point - capture may see raw provider misses");
 
-    if (!anyW || !anyL) { LogLine("fatal: mandatory hooks unavailable"); return; }
+    // Only the SPOOF is load-bearing (it is the whole fix). The observer and
+    // mirror are diagnostics/degradation-tolerant: their absence must never
+    // switch the fix off, and the fix must never pretend to be armed.
+    if (g_cfg.spoof && !anyW)
+        LogLine("CRITICAL: kernel32!GetModuleFileNameW not hookable - the spoof CANNOT reach the capture module; "
+                "check for a conflicting hook engine in another .asi (bridge stays armed for diagnostics only)");
+    if (!anyL) LogLine("note: LdrGetProcedureAddress observer unavailable - resolution diagnostics off");
     if ((st = MH_EnableHook(MH_ALL_HOOKS)) != MH_OK) { LogLine("fatal: MH_EnableHook=%d", (int)st); return; }
-    LogLine("armed: spoof on kernel32+kernelbase, observer on ntdll resolver, factory hooks on target exports");
+    LogLine("armed: spoof=%d (kernel32 %s), observer=%d, factory hooks=%d/6",
+            (int)(g_cfg.spoof && anyW), anyW ? "ok" : "MISSING", (int)anyL, hooked);
 }
 
 static void FindTarget()
 {
-    for (int i = 0; i < 300 && !g_opti; ++i) {
+    // Poll for as long as the process lives: a 30s deadline could permanently
+    // disable the bridge on a heavily-modded boot (or if OptiScaler is
+    // enabled later); one GetModuleHandleW per second costs nothing.
+    bool warned = false;
+    for (unsigned i = 0; !g_opti; ++i) {
         g_opti = GetModuleHandleW(g_cfg.target.c_str());
         if (g_opti) break;
-        Sleep(100);
+        if (i == 30 && !warned) {
+            warned = true;
+            LogLine("waiting for target '%S' - still polling (check ini name / that OptiScaler is enabled)",
+                    g_cfg.target.c_str());
+        }
+        DrainRing();
+        Sleep(1000);
     }
-    if (!g_opti) { LogLine("target '%S' not loaded - bridge idle (check ini)", g_cfg.target.c_str()); return; }
     GetModuleFileNameW(g_opti, g_optiPath, MAX_PATH);
     LogLine("target found: %S at %p", g_optiPath, (void*)g_opti);
     std::wstring p = g_optiPath;
     size_t sep = p.find_last_of(L"\\/");
     if (sep != std::wstring::npos) p = p.substr(0, sep + 1);
-    wcscpy(g_fakePath, (p + L"nvngx.dll").c_str());
+    std::wstring fake = p + L"nvngx.dll";
+    if (fake.size() + 1 > MAX_PATH) {
+        // never overflow g_fakePath[MAX_PATH]; a too-long path simply means
+        // no spoof, loudly logged - the game keeps working, upscale intact.
+        g_fakePath[0] = 0;
+        LogLine("warning: target directory too long for the spoof path (%zu) - SPOOF DISABLED", fake.size());
+    } else {
+        wcscpy(g_fakePath, fake.c_str());
+    }
 }
 
 static DWORD WINAPI InitThread(LPVOID)
 {
     FindTarget();
-    if (!g_opti) return 0;
     InstallHooks();
+    // log-queue flusher for messages produced under the loader lock
+    for (;;) { DrainRing(); Sleep(500); }
     return 0;
 }
 
@@ -614,6 +758,7 @@ BOOL WINAPI DllMain(HINSTANCE h, DWORD reason, LPVOID)
 {
     if (reason == DLL_PROCESS_ATTACH) {
         DisableThreadLibraryCalls(h);
+        g_self = h;
         LogOpen();
         InitializeCriticalSection(&g_mirrorCs);
         LoadConfig(h);

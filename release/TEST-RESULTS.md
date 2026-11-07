@@ -60,41 +60,40 @@ Transcrição completa (reprodutível; só endereços/timestamps mudam):
 [GAME   ] == mock game: RDR2 NGX loader simulation ==
 [OPTI-MOCK] loaded
 [MOR3A-MOCK] loaded
-[GAME   ] modules: opti=00006ffffa910000 mor3a=00006ffffc420000 bridge=00006ffffc0d0000
+[GAME   ] modules: opti=... mor3a=... bridge=...
 [MOR3A-MOCK] gate installed (game IAT GetProcAddress redirect); waiting for NVSDK_NGX_VULKAN_* resolutions
-[MOR3A-MOCK] gateIAT #2 m=00006ffffa910000 name=NVSDK_NGX_VULKAN_CreateFeature
-[MOR3A-MOCK] gate name=... provider='Z:\...\build\selftest\nvngx.dll'
+[MOR3A-MOCK] gate name=...CreateFeature provider='Z:\...\build\selftest\nvngx.dll'
 [MOR3A-MOCK] RESULT: ACCEPT - installing input-capture wrapper
-[MOR3A-MOCK] gateIAT #3 m=00006ffffa910000 name=NVSDK_NGX_VULKAN_EvaluateFeature
+[MOR3A-MOCK] gate name=...EvaluateFeature provider='Z:\...\build\selftest\nvngx.dll'
 [MOR3A-MOCK] RESULT: ACCEPT - installing input-capture wrapper
-[GAME   ] resolved alloc=00006ffffa911ee0 create=... eval=...
+[GAME   ] resolved alloc=... create=... eval=...
 [OPTI-MOCK] AllocateParameters -> param=00000000007c5370
-[OPTI-MOCK] dump(obj=00000000007c5370) vptr=00006ffffa942140 (off=+0x32140)
-    slot[ 0..7]=stubs externos(Set)  slot[ 8..15]=stubs externos(Get)   <- vtable espelhada
+[OPTI-MOCK] dump(obj=00000000007c5370) vptr=... (off=+0x32140)
+    slot[ 0..15]=stubs externos   <- vtable espelhada
 [MOR3A-MOCK] CreateFeature: SR flags result=1 value=1 MIRROR-CROSS-TYPE-OK
-[OPTI-MOCK] CreateFeature(feature=1 params=...) - upscaling implementation would run here
 [GAME   ] CreateFeature result=1
 [MOR3A-MOCK] OBSERVER depth(result=1 ptr=0000000140009100) motionvectors(result=1 ptr=0000000140009000) OBSERVER-OK
-[OPTI-MOCK] EvaluateFeature IMPL ran (params=...) - provider saw the frame inputs
 [GAME   ] frame 1 evaluate result=1
 [MOR3A-MOCK] OBSERVER depth(result=1 ptr=0000000140009100) motionvectors(result=1 ptr=0000000140009000) OBSERVER-OK
 [GAME   ] frame 2 evaluate result=1
+[GAME   ] post-Reset provider=1 flags read result=0 STALE-GUARD-OK
 ----- bridge log -----
-== ngxbridge 0.1.0 == enabled=1 spoof=1 mirror=1 target=mock_optiscaler.dll hints=2
-target found: Z:\...\build\selftest\mock_optiscaler.dll at 00006ffffa910000
-hook GetModuleFileNameW: kernel32=00006fffff9ce7c4:1 kernelbase=00006fffff34cea0:1
-hook GetModuleFileNameA: kernel32=00006fffff9ce7ac:1 kernelbase=00006fffff34c940:1
-hook observer: ntdll!LdrGetProcedureAddress=00006fffffbb82c0 -> 0
+== ngxbridge 0.1.1 == enabled=1 spoof=1 mirror=1 target=mock_optiscaler.dll hints=2
+target found: Z:\...\build\selftest\mock_optiscaler.dll at ...
+hook GetModuleFileNameW: kernel32=...:1 kernelbase=...:1
+hook GetModuleFileNameA: kernel32=...:1 kernelbase=...:1
+hook observer: ntdll!LdrGetProcedureAddress=... -> 0
 mirror: 2/6 parameter-factory export hooks created   (mock só tem os Vulkan; real tem os 6 - verificado no código)
-armed: spoof on kernel32+kernelbase, observer on ntdll resolver, factory hooks on target exports
-resolved 'NVSDK_NGX_VULKAN_AllocateParameters' from the OptiScaler handle by kernel32.dll -> 00006ffffa911ee0
-resolved 'NVSDK_NGX_VULKAN_CreateFeature' from the OptiScaler handle by kernel32.dll -> 00006ffffa911fd0
-spoofed provider path for capture module: Z:\...\build\selftest\nvngx.dll
-resolved 'NVSDK_NGX_VULKAN_EvaluateFeature' from the OptiScaler handle by kernel32.dll -> 00006ffffa912040
-spoofed provider path for capture module: Z:\...\build\selftest\nvngx.dll
-intercepted NVSDK_NGX_VULKAN_AllocateParameters (result=1 obj=00000000007c5370)
-mirror: vtable 00006ffffa942140 patched (16 typed slots) - cross-type reads now answered
+armed: spoof=1 (kernel32 ok), observer=1, factory hooks=2/6
+intercepted NVSDK_NGX_VULKAN_AllocateParameters (result=1 obj=00000000007c5370) by mock_game.exe
+mirror: vtable ... patched (16 typed slots + Reset) - cross-type reads now answered, stale-after-reset guarded
 mirror: coerced typed answer for 'DLSS.Feature.Create.Flags'
+mirror: no fallback for 'DLSS.Feature.Create.Flags'    <- pós-Reset: recusa correta de valor antigo
+resolved 'NVSDK_NGX_VULKAN_AllocateParameters' from the OptiScaler handle by mock_mor3a.dll -> ...
+resolved 'NVSDK_NGX_VULKAN_CreateFeature' from the OptiScaler handle by mock_mor3a.dll -> ...
+spoofed provider path for capture module: Z:\...\build\selftest\nvngx.dll
+resolved 'NVSDK_NGX_VULKAN_EvaluateFeature' from the OptiScaler handle by mock_mor3a.dll -> ...
+spoofed provider path for capture module: Z:\...\build\selftest\nvngx.dll
 ----- verdict -----
 SELFTEST: PASS
 ```
@@ -108,6 +107,8 @@ O que cada linha prova:
 | `OBSERVER-OK` ×2 frames | o observador do wrapper vê Depth+MotionVectors **não nulos** do OptiScaler-mock em todos os frames |
 | `MIRROR-CROSS-TYPE-OK` + `coerced typed answer` | a leitura cruzada de tipo (int gravado lido por slot "unsigned") só existe por causa do espelho — o provedor puro falharia ali (verificado com Mirror=0: `MIRROR-MISSING(flags)` + `input` inválido) |
 | `2/6 ... created` | degradação graciosa quando um export não existe (mock tem só os 2 Vulkan; real tem os 6, verificado no código do 0.9.4) |
+| `STALE-GUARD-OK` + `no fallback ...` | depois do `Reset()` do provedor (slot 16), o espelho **recusa** o valor pré-reset — a invariante "nada de frame antigo vale" tem teste próprio |
+| `by mock_game.exe` / `by mock_mor3a.dll` | atribuição correta de quem criou o objeto (o jogo) e de quem encaminhou a resolução (o hook global do Mor3a; na produção aparecerá `RDR2VulkanFG.asi` — é exatamente o sinal que a §6.1 do DIAGNOSIS procura) |
 
 ## T4 — self-test no Windows
 

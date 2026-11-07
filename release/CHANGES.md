@@ -64,6 +64,31 @@ intactos (os caminhos citados em DIAGNOSIS.md são só leitura).
 | exportações `{Allocate,Get}Parameters` × 3 APIs | — | — | hook (instala espelho) |
 | vtable dos objetos de parâmetros | — | lida por mapa reverso | stubs tipados por objeto |
 
+## v0.1.1 — correções da revisão pré-entrega
+
+Uma revisão adversarial do código (achados de code-review + smoke test dos
+`.bat` sob Wine) encontrou e corrigiu 11 problemas. Os que importam para quem
+vai rodar no jogo:
+
+| # | Problema | Consequência sem correção | Correção |
+|---|---|---|---|
+| R1 | Corrida em `MirrorEnsureObject` (checagem/patch/registro não atômicos) | dois threads criando o 1º objeto de cada classe podiam salvar stubs como "originais" → **auto-recursão → stack overflow**, ou drops silenciosos do provedor | seção crítica única cobre check+patch+registro |
+| R2 | `wcscpy` sem limite em `g_fakePath[MAX_PATH]` | caminho do OptiScaler ≥251 chars → **estouro de buffer** em .bss | montagem verificada; caminho longo demais desliga só o spoof, logado |
+| R3 | `fprintf`/`fflush` executando sob a **loader lock** (hooks de GPFN/`LdrGPA`) | deadlock clássico loader-lock↔heap travando o boot do jogo | fila estática lock-free (sem heap) drena num thread normal |
+| R4 | Observador obrigatório (`!anyL` desarmava tudo) | hook de **log** fracassar desligava o **fix** | só o spoof é load-bearing; observador/espelho degradam com aviso |
+| R5 | `HookBoth` aceitava kernelbase como suficiente | kernel32 não hookado → forwarder disfarça o chamador → spoof nunca dispara **em silêncio** | kernel32 é obrigatório; falha é logada como CRITICAL e o resto arma p/ diagnóstico |
+| R6 | `Reset()` (slot 16) nunca espelhado | leitura cruzada pós-Reset responderia **valor antigo** (possível recurso já liberado) — viola o §6 do briefing | slot 16 patcheado; `Reset` apaga a memória do espelho (teste `STALE-GUARD-OK`) |
+| R7 | Alvo procurado por só 30 s e desistência eterna | OptiScaler lento (boot com muitos MODs) = bridge inerte a sessão toda | polling enquanto o processo viver, aviso após ~30 s |
+| R8 | Observador sempre atribuía "by kernel32.dll" | as perguntas §9 ("quem resolveu?") respondidas erradas | `RtlCaptureStackBackTrace` pulando sistema/trampolins; factories também atribuem |
+| R9 | Contador com wrap pulando um `NoteSet` a cada 2^32 | 1 registro perdido por volta (comentário dizia "inofensivo" — não era) | incremento vira só estatística; store sempre acontece |
+| R10 | `install.bat` rodando na própria pasta copiada (modo README): move p/ backup e copia de fonte já movida | **instalação falhava no fluxo principal documentado** | modo in-place detectado; backup só no modo com argumento |
+| R11 | `%date%` p/ carimbo de backup + caminho sem `\` no argumento + `if` encadeado que wine/cmd não engolem | carimbo inválido, concatenação quebrada, uninstall sem efeito | carimbo `%time%`, normalização de path, `goto` no lugar do `if` duplo |
+
+Instalador/desinstalador foram testados sob Wine nos 5 fluxos (instalação
+limpa com argumento, upgrade com backup+restore, uninstall com restore, modo
+in-place, uninstall sem backup). Self-test com a nova condição `STALE-GUARD-OK`
+e atribuição de chamador: PASS.
+
 ## Conformidade com as restrições do briefing (§6)
 
 - sem hooks recursivos/duplicados: um único MinHook, zero sobreposição de endereços ✔

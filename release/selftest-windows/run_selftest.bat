@@ -20,6 +20,7 @@ echo ---------------- veredito ----------------
 findstr /c:"OBSERVER-OK" stdout.log >nul || goto :fail
 findstr /c:"ACCEPT - installing" stdout.log >nul || goto :fail
 findstr /c:"MIRROR-CROSS-TYPE-OK" stdout.log >nul || goto :fail
+findstr /c:"STALE-GUARD-OK" stdout.log >nul || goto :fail
 findstr /c:"spoofed provider path" RDR2VulkanFG\ngxbridge.log >nul || goto :fail
 findstr /c:"patched" RDR2VulkanFG\ngxbridge.log >nul || goto :fail
 echo SELFTEST: PASS

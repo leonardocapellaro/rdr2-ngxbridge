@@ -153,11 +153,16 @@ lógica de coerção: verde. Compilação Windows x64 real do `.asi`.
 
 **A provar na B390 (sem atalho honesto):**
 1. *Caminho de resolução do jogo:* o gate do Mor3a só existe se a resolução
-   `GetProcAddress` do jogo passar pelo hook dele. O observador registra o
-   módulo chamador de cada resolução (`resolved '...' by <modulo>`); se
-   aparecer `kernel32.dll`/`kernelbase.dll`, a cadeia do Mor3a vê o mesmo
-   evento e o spoof funciona. Se aparecer outro módulo, o log prova e a
-   correção é pontual (outro ponto de observação) — até lá **não afirmamos
+   `GetProcAddress` do jogo passar pelo hook dele. O observador registra a
+   pilha de cada resolução (`resolved '...' by <módulo>` = o primeiro módulo
+   não-sistema na pilha de quem pediu o símbolo — trampolins de hook e
+   forwarders kernel32/kernelbase são pulados). Leitura:
+   `by RDR2VulkanFG.asi` = a resolução passou pelo hook global do Mor3a → o
+   gate vê o evento e o spoof dispara (melhor caso, é o que a cadeia de
+   testes demonstra); `by RDR2.exe` = o jogo resolveu contornando o hook do
+   Mor3a → o gate nunca veria os três nomes e a correção precisaria de outro
+   ponto de injeção (o log prova qual e onde). Até essa linha existir no log
+   real, **não afirmamos
    "funciona no RDR2"**, apenas "a causa raiz foi eliminada no ponto
    comprovado".
 2. *Jitter:* o `GetF` reverso do Mor3a (slot 14 = real `Get(D3D12**)`) não

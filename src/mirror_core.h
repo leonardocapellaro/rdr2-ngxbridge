@@ -23,7 +23,11 @@ enum NgxParamSlot : int {
     SLOT_SET_I = 4,      SLOT_SET_D3D11 = 5, SLOT_SET_D3D12 = 6, SLOT_SET_VOIDPTR = 7,
     SLOT_GET_ULL = 8,    SLOT_GET_F = 9,   SLOT_GET_D = 10,  SLOT_GET_UI = 11,
     SLOT_GET_I = 12,     SLOT_GET_D3D11 = 13, SLOT_GET_D3D12 = 14, SLOT_GET_VOIDPTR = 15,
-    SLOT_COUNT = 16,   // slot 16 = Reset(); never patched
+    SLOT_COUNT = 16,
+    SLOT_RESET = 16,     // Reset() IS patched: provider Reset must also drop
+                         // mirror memory, so no value from before the reset can
+                         // ever answer a Get (never-use-stale-inputs invariant).
+    SLOTS_TOTAL = 17,
 };
 
 enum class ValueKind : uint8_t { None = 0, Ptr, I, UI, ULL, F, D };

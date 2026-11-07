@@ -38,7 +38,8 @@ done
    | sort -z | xargs -0 sha256sum > SHA-256SUMS.txt)
 
 # zip do pacote (nome com versao; -X sem metadados extra)
-ZIP=ngxbridge-v0.1.0-rdr2-xefg-compat.zip
+VER=$(grep -oP '#define NGXBRIDGE_VERSION "\K[^"]+' src/ngxbridge.cpp)
+ZIP=ngxbridge-v${VER}-rdr2-xefg-compat.zip
 rm -f "$ZIP"
 zip -rqX "$ZIP" release
 echo "PACOTE OK: $(pwd)/$ZIP"

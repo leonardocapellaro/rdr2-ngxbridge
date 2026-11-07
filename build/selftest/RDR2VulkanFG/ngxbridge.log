@@ -1,21 +1,22 @@
-[18:39:52.806] == ngxbridge 0.1.0 == enabled=1 spoof=1 mirror=1 target=mock_optiscaler.dll hints=2
-[18:39:52.806] target found: Z:\home\lcapellaro\Documentos\Projects\fix_fg_arc_rdr2\case\ngxbridge\build\selftest\mock_optiscaler.dll at 00006ffffa910000
-[18:39:52.806] hook GetModuleFileNameW: kernel32=00006fffff9ce7c4:1 kernelbase=00006fffff34cea0:1
-[18:39:52.806] hook GetModuleFileNameA: kernel32=00006fffff9ce7ac:1 kernelbase=00006fffff34c940:1
-[18:39:52.806] hook observer: ntdll!LdrGetProcedureAddress=00006fffffbb82c0 -> 0
-[18:39:52.807] mirror: export NVSDK_NGX_D3D12_AllocateParameters not present in target
-[18:39:52.807] mirror: export NVSDK_NGX_D3D12_GetParameters not present in target
-[18:39:52.807] mirror: export NVSDK_NGX_D3D11_AllocateParameters not present in target
-[18:39:52.807] mirror: export NVSDK_NGX_D3D11_GetParameters not present in target
-[18:39:52.807] mirror: 2/6 parameter-factory export hooks created
-[18:39:52.810] armed: spoof on kernel32+kernelbase, observer on ntdll resolver, factory hooks on target exports
-[18:39:54.808] resolved 'NVSDK_NGX_VULKAN_AllocateParameters' from the OptiScaler handle by kernel32.dll -> 00006ffffa911ee0
-[18:39:54.808] resolved 'NVSDK_NGX_VULKAN_CreateFeature' from the OptiScaler handle by kernel32.dll -> 00006ffffa911fd0
-[18:39:54.808] GPFN[W] hook fired (m=00006ffffa910000)
-[18:39:54.808] spoofed provider path for capture module: Z:\home\lcapellaro\Documentos\Projects\fix_fg_arc_rdr2\case\ngxbridge\build\selftest\nvngx.dll
-[18:39:54.808] resolved 'NVSDK_NGX_VULKAN_EvaluateFeature' from the OptiScaler handle by kernel32.dll -> 00006ffffa912040
-[18:39:54.808] GPFN[W] hook fired (m=00006ffffa910000)
-[18:39:54.808] spoofed provider path for capture module: Z:\home\lcapellaro\Documentos\Projects\fix_fg_arc_rdr2\case\ngxbridge\build\selftest\nvngx.dll
-[18:39:54.808] intercepted NVSDK_NGX_VULKAN_AllocateParameters (result=1 obj=00000000007c5370)
-[18:39:54.808] mirror: vtable 00006ffffa942140 patched (16 typed slots) - cross-type reads now answered
-[18:39:54.808] mirror: coerced typed answer for 'DLSS.Feature.Create.Flags'
+[20:17:45.668] == ngxbridge 0.1.1 == enabled=1 spoof=1 mirror=1 target=mock_optiscaler.dll hints=2
+[20:17:45.668] target found: Z:\home\lcapellaro\Documentos\Projects\fix_fg_arc_rdr2\case\ngxbridge\build\selftest\mock_optiscaler.dll at 00006ffffa910000
+[20:17:45.668] hook GetModuleFileNameW: kernel32=00006fffff9ce7c4:1 kernelbase=00006fffff34cea0:1
+[20:17:45.668] hook GetModuleFileNameA: kernel32=00006fffff9ce7ac:1 kernelbase=00006fffff34c940:1
+[20:17:45.668] hook observer: ntdll!LdrGetProcedureAddress=00006fffffbb82c0 -> 0
+[20:17:45.668] mirror: export NVSDK_NGX_D3D12_AllocateParameters not present in target
+[20:17:45.668] mirror: export NVSDK_NGX_D3D12_GetParameters not present in target
+[20:17:45.668] mirror: export NVSDK_NGX_D3D11_AllocateParameters not present in target
+[20:17:45.668] mirror: export NVSDK_NGX_D3D11_GetParameters not present in target
+[20:17:45.668] mirror: 2/6 parameter-factory export hooks created
+[20:17:45.672] armed: spoof=1 (kernel32 ok), observer=1, factory hooks=2/6
+[20:17:47.668] intercepted NVSDK_NGX_VULKAN_AllocateParameters (result=1 obj=00000000007c5370) by mock_game.exe
+[20:17:47.668] mirror: vtable 00006ffffa942140 patched (16 typed slots + Reset) - cross-type reads now answered, stale-after-reset guarded
+[20:17:47.668] mirror: coerced typed answer for 'DLSS.Feature.Create.Flags'
+[20:17:47.668] mirror: no fallback for 'DLSS.Feature.Create.Flags'
+[20:17:47.674] resolved 'NVSDK_NGX_VULKAN_AllocateParameters' from the OptiScaler handle by mock_mor3a.dll -> 00006ffffa911ee0
+[20:17:47.674] resolved 'NVSDK_NGX_VULKAN_CreateFeature' from the OptiScaler handle by mock_mor3a.dll -> 00006ffffa911fd0
+[20:17:47.674] GPFN[W] hook fired (m=00006ffffa910000)
+[20:17:47.674] spoofed provider path for capture module: Z:\home\lcapellaro\Documentos\Projects\fix_fg_arc_rdr2\case\ngxbridge\build\selftest\nvngx.dll
+[20:17:47.674] resolved 'NVSDK_NGX_VULKAN_EvaluateFeature' from the OptiScaler handle by mock_mor3a.dll -> 00006ffffa912040
+[20:17:47.674] GPFN[W] hook fired (m=00006ffffa910000)
+[20:17:47.674] spoofed provider path for capture module: Z:\home\lcapellaro\Documentos\Projects\fix_fg_arc_rdr2\case\ngxbridge\build\selftest\nvngx.dll
