@@ -50,7 +50,7 @@
 #include <string>
 #include <vector>
 
-#define NGXBRIDGE_VERSION "0.1.1"
+#define NGXBRIDGE_VERSION "0.1.2"
 #define NGX_SUCCESS 0x00000001
 
 // ---------------------------------------------------------------- logging ---

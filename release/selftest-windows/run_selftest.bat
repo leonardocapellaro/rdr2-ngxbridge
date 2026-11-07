@@ -14,7 +14,9 @@ echo.
 echo ---------------- stdout ----------------
 type stdout.log
 echo ---------------- bridge log ----------------
-if exist RDR2VulkanFG\ngxbridge.log (type RDR2VulkanFG\ngxbridge.log) else (echo (SEM LOG DA PONTE!))
+rem NAO usar if (...) else (...) aqui: cmd real reprova echo com parenteses
+rem dentro de bloco (wine perdoa, o cmd.exe nao).
+type RDR2VulkanFG\ngxbridge.log 2>nul || echo SEM LOG DA PONTE - o bridge nao carregou?
 echo ---------------- veredito ----------------
 
 findstr /c:"OBSERVER-OK" stdout.log >nul || goto :fail

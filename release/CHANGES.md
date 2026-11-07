@@ -89,6 +89,17 @@ limpa com argumento, upgrade com backup+restore, uninstall com restore, modo
 in-place, uninstall sem backup). Self-test com a nova condição `STALE-GUARD-OK`
 e atribuição de chamador: PASS.
 
+## v0.1.2 — correção apontada pelo cmd.exe real da máquina de destino
+
+| # | Problema | Consequência | Correção |
+|---|---|---|---|
+| R12 | `run_selftest.bat`: `if exist … (type …) else (echo (SEM LOG…))` — o `)` do echo fecha o bloco `else` cedo; o Wine perdoa, o **cmd.exe real reprova** (`) foi inesperado`) e o script morre antes do veredito | self-test na Windows real imprimia o stdout, mas não o log da ponte nem `SELFTEST: PASS`/`FAIL` | impressão via `type … 2>nul \|\| echo …`, sem parênteses; único caso do padrão em todo o pacote (demais `(` em `echo` estão fora de blocos e são literais) |
+
+Nenhum `.asi` alterado entre 0.1.1 e 0.1.2 — só o `.bat` do self-test e a
+versão declarada (nome/hash do pacote). Os 4 critérios de stdout já apareciam
+no relatório do cmd real; os 2 do log da ponte (spoof + vtable) foram
+verificáveis por `findstr` no mesmo diretório de execução.
+
 ## Conformidade com as restrições do briefing (§6)
 
 - sem hooks recursivos/duplicados: um único MinHook, zero sobreposição de endereços ✔
