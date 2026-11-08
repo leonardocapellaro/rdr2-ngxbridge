@@ -44,7 +44,7 @@ for f in "${APP[@]}"; do SRC+=("$ROOT/src/$f"); done
 SRC+=("$ROOT/vendor/xemfg-reference/host_unlock.cpp")
 XESS=(xess_bridge_device dlssg_bridge_runtime xess_bridge_runtime xess_output_pacing
       xess_bridge_plan xess_bridge_snapshot xess_bridge_handoff xess_provider
-      camera_frame experiment_metrics core_diagnostics)
+      camera_frame experiment_metrics core_diagnostics ui_synth)
 for m in "${XESS[@]}"; do SRC+=("$ROOT/src/$m.cpp"); done
 for g in imgui imgui_draw imgui_tables imgui_widgets imgui_impl_win32 imgui_impl_vulkan; do
   SRC+=("$ROOT/vendor/imgui/$g.cpp"); done

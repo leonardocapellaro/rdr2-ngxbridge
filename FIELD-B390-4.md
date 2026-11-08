@@ -1,12 +1,13 @@
-# FIELD-B390-4 — plano da sessão v3 (uma sentada)
+# FIELD-B390-4 — plano da sessão de campo (uma sentada)
 
-Build: `0.82+hudfield-v3` (asi `206fd35f…`, zip `RDR2VulkanFG-hudfield-v3-B390.zip`, sha `914c4780…`).
-Pacote: `release-hudfield-v3/` (também no release GitHub: `RDR2-Vulkan-FG` tag `v0.82-hudfield-v3`).
+Build: `0.82+hudfield-v4` (asi `01276362…`, zip `RDR2VulkanFG-hudfield-v4-B390.zip`). A v3 virou subconjunto da v4 (`hudfield-v4` = v3 + camada UI sintética opt-in).
+Pacote: `release-hudfield/` (também no release GitHub: `RDR2-Vulkan-FG` tag `v0.82-hudfield-v3`).
 
 ## O que a v3 traz (resumo p/ quem vai testar)
 
 - Diagnostics de input do menu (v2 preservados): `menu: open/close`, `menu input: left click…`, `hotkey: … ignored — foreground…`.
 - `XeSSUiMode` (1–5) e `XeSSUiComposition` (-1/0/1) no INI; log de criação mostra `uiMode=%u uiComposition=%d`; modos 2/3/5 com clamp logado p/ 4.
+- **v4:** `XeSSSynthUI=1` sintetiza a UI premultiplicada (compute B−(1−a)C) e libera modos 3/5 — TESTE 5 no checklist do pacote.
 - Update-check Nexus do autor original desligado (id=0).
 - Branding visível: "RDR2 Vulkan FG".
 

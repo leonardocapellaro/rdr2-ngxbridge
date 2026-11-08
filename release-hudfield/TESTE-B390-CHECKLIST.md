@@ -1,4 +1,4 @@
-# Teste na B390 — pacote v3 (marca no log: `hudfield-v3`)
+# Teste na B390 — pacote v4 (marca no log: `hudfield-v4`)
 
 ## Antes de tudo (1x só, jogo fechado)
 
@@ -11,7 +11,7 @@
 4. Abra `RDR2VulkanFG.ini` (mesma pasta do `.asi`) e deixe o bloco do teste BASELINE (abaixo).
 
 Caminho do log, sempre: `<pasta do jogo>\RDR2VulkanFG.log`. Toda sessão começa com a linha
-`... RDR2 Vulkan FG 0.82+hudfield-v3 ...` — se não aparecer, o `.asi` novo não está em uso.
+`... RDR2 Vulkan FG 0.82+hudfield-v4 ...` — se não aparecer, o `.asi` novo não está em uso.
 
 ## Como rodar cada teste (repetir os 4 passos)
 
@@ -91,6 +91,25 @@ Depois, no log, me diga quais destas linhas existem:
 - `menu input: left click observed` → clique chega no jogo (problema é só o menu)
 - `hotkey: ... ignored — foreground` → tecla chegou, jogo não estava focado
 - nada disso → o input não chega nem perto; é aqui que eu vou consertar no fork
+
+## TESTE 5 — UI sintética (`XeSSSynthUI=1` + `XeSSUiMode=5`) — só se o TESTE 2 der (a)
+
+Mesmo INI do baseline + duas linhas:
+```ini
+XeSSSynthUI=1
+XeSSUiMode=5
+```
+
+Roteira: roda de itens + roda de armas (compare mentalmente com o baseline).
+
+No log confirme: `XeSS synthetic UI armed ... UI mode 5`, `Synthetic UI layer first frame`,
+`uiMode=5`. Resultados possíveis:
+- **(a) roda limpa ou quase** → vitória: a UI sintética + extração do modo 5 resolveu o
+  flicker. Aí calibramos o alfa (gain) se restar algum halo.
+- **(b) halos/bordas estranhas na UI mas sem o flicker de antes** → perto; ajuste de
+  heurística de alfa resolve (me traga um print/coleta).
+- **(c) igual ou pior** → o problema não é composição (reforça o diagnóstico do TESTE 2b).
+Se a build logar `clamping to 4 ... Set XeSSSynthUI=1`, a chave não foi lida.
 
 ## Sem o menu (alternativa do multiplicador, se necessário)
 

@@ -1,6 +1,6 @@
-# RDR2 Vulkan FG — build `0.82+hudfield-v3` (B390 + OptiScaler)
+# RDR2 Vulkan FG — build `0.82+hudfield-v4` (B390 + OptiScaler)
 
-> Procure a tag **`hudfield-v3`** na primeira linha do `RDR2VulkanFG.log`.
+> Procure a tag **`hudfield-v4`** na primeira linha do `RDR2VulkanFG.log`.
 > Se ela não aparecer, o `.asi` antigo continua em uso.
 
 **O que este build é:** a base 0.82 do projeto (fonte pública, MIT — licença do
@@ -34,6 +34,13 @@ mecanismo.
    zerado — este build não faz nenhuma chamada de rede nem abre página de
    terceiros.
 6. Branding das strings visíveis: **RDR2 Vulkan FG**.
+7. **Novo na v4 — `XeSSSynthUI` (INI, 0/1, padrão 0):** sintetiza a camada UI premultiplicada
+   que os modos 3/5 exigem. Um compute shader resolve `UI = B − (1−a)·C` entre o quadro
+   apresentado (B) e o snapshot HUD-less (C) do mesmo epoch; o alfa vem do maior delta de
+   canal (escalado). A identidade composicional reproduz B exatamente para qualquer alfa —
+   o erro residual fica a cargo do refinamento por extração do modo 5 (mitigação documentada
+   da Intel para UI semitransparente). Experimental: o palpite de alfa só vale olho em
+   hardware; com a chave em 0 o comportamento é idêntico ao v3.
 
 ## Instalação (troca 1 arquivo)
 
@@ -60,15 +67,12 @@ config **numa sessão curta**, abra a roda de armas/itens, observe, e rode
 | *(nada — baseline)* | modo 4 + composição ligada (estado de hoje: roda pisca) | controle |
 | `XeSSUiMode=1` | interpola o backbuffer **com** HUD embutido; sem composição. A roda é interpolada pelo modelo em vez de recomposta | se a roda parar de piscar mas **borrar** ao girar → confirma que o problema é a extração por dif; troca um artefato por outro |
 | `XeSSUiComposition=0` (com modo 4) | composição desligada: frames gerados **sem HUD nenhum** | esperado PIOR (HUD pisca sumindo) — só para confirmar a direção; não deixe ligado |
+| `XeSSSynthUI=1` + `XeSSUiMode=5` (v4) | UI sintética premultiplicada + refinamento por extração — a mitigação que a Intel documenta p/ UI semitransparente | se o culpado for o modo 4, esta deve ser a MELHOR roda; confira `Synthetic UI layer first frame` e `uiMode=5` no log |
 
 Regras da grade: uma variável por sessão; anote qual INI usou; confira no log a
 linha `uiMode=... uiComposition=...` refletindo o pedido (ou o log de clamp).
 
-**Por que não `XeSSUiMode=3`/`5`?** São o caminho certo de verdade (mistura UI
-de verdade na composição — a mitigação que a própria Intel recomenda p/ UI
-semitransparente), mas precisam de uma textura UI que o jogo não expõe. O fork
-pode sintetizá-la no futuro (diff backbuffer−hudless como a OptiScaler faz com
-HUDFix) — a grade acima mede se esse investimento vale.
+**Modos 3/5 na v4:** com `XeSSSynthUI=1` eles deixam de ser barrados — a textura UI passa a ser a camada sintetizada (a OptiScaler faz o equivalente com HUDFix). O clamp continua ativo com a chave desligada ou backbuffer HDR, sempre com log explicando.
 
 ## Menu e multiplicador
 
