@@ -1,76 +1,98 @@
-# RDR2VulkanFG 0.82+hudfield-v2 — para B390 + OptiScaler
+# RDR2 Vulkan FG — build `0.82+hudfield-v3` (B390 + OptiScaler)
 
-> Build `0.82+hudfield-v2` (procure esta tag na primeira linha do log). v2 adds
-> pure-diagnostics (menu open/close, first clicks observed, focus-rejected hotkeys)
-> and keeps the opt-in transfer capture; zero behavior change otherwise.
+> Procure a tag **`hudfield-v3`** na primeira linha do `RDR2VulkanFG.log`.
+> Se ela não aparecer, o `.asi` antigo continua em uso.
 
-**Contexto honesto (pós-teste de campo):** o beta 1.0 prendia em
-`HUD-less post-tone-map pass missing` com OptiScaler (nunca rodava FG). O 0.82
-compilado deste fonte **funciona**: FG 2x validado na B390 (~36 reais → ~72
-exibidos). A correção de transfer (`CapturePresentTransfers=1`) permanece
-opt-in e inofensiva — em campo a assinatura normal já casou e ela não chegou a
-ser usada (0 hits). Esta v2 adiciona só diagnóstico: `menu: open/close`,
-primeiros cliques vistos na fila do jogo, hotkeys ignoradas por foco — pra
-descobrir por que os cliques/teclas de multiplicador não registraram.
+**O que este build é:** a base 0.82 do projeto (fonte pública, MIT — licença do
+autor original intacta em `LICENSE.txt` do repo) + nossas mudanças: diagnóstico
+de menu/hotkey, knobs de composição de UI do XeSS-FG, e proteção contra
+configurações que matariam o FG. Nada de binaries NVIDIA/Intel/Rockstar aqui —
+só o `.asi` compilado por nós e o coletor de diagnósticos.
 
-**O que é exatamente:** fonte público 0.82 do mod (GitHub, commit `bc853d0`) +
-nosso patch (`patches/hud-capture-present-transfer.patch`, 175 linhas). Nada de NVIDIA/Intel/Rockstar; MIT.
+**O que já está validado em campo (B390, sessão 07/11):** FG 2x funcionando sob
+Vulkan com OptiScaler (~36 fps reais → ~72 exibidos em 3440x1440). O menu nunca
+recebeu cliques/teclas (0 eventos no log) — os diagnósticos v2+ desta build
+localizam onde o input morre. A roda de itens pisca — a grade abaixo testa o
+mecanismo.
 
-**Build real:** `zig c++ -target x86_64-windows-gnu` (zig 0.17.1; o autor usa
-0.16.0 — o 0.16 tem libc++ quebrado p/ windows-gnu em host Linux), deps nos
-mesmos commits pinados do Build.ps1. Script reproduzível em
-`case/ngxbridge/tools/build-mor3a-zig-linux.sh`. Verificações feitas aqui:
-compila limpo; o `.asi` carrega e descarrega no Wine com a ini armada.
-**Não rodou RDR2** — só a B390 prova.
+## Mudanças vs. v2
 
-## Instalação (substitui SÓ um arquivo)
+1. **`XeSSUiMode` (INI, valores 1–5, padrão 4):** escolhe o modo de composição
+   de UI do swapchain XeSS-FG na criação. A build registra o modo **efetivo** na
+   linha `... uiMode=%u uiComposition=%d` do log.
+2. **Clamp de segurança:** modos 2/3/5 *exigem* uma textura UI separada que
+   RDR2/Vulkan não expõe — sem ela o SDK recusaria a criação
+   (`MISMATCH_INPUT_RESOURCES`) e **nenhum frame seria gerado**. Se você poner
+   um desses, a build reduz para 4 e loga
+   `XeSSUiMode=N needs a UI texture RDR2 cannot provide; clamping to 4`.
+3. **`XeSSUiComposition` (INI, -1/0/1, padrão -1):** força o estado de
+   composição de UI (`-1` = auto do autor: ligado, exceto modo `NONE`; `0` =
+   força desligado; `1` = força ligado).
+4. **Diagnósticos v2 preservados:** `menu: open/close`, primeiros cliques
+   observados na fila do jogo, hotkeys ignoradas por foco errado.
+5. **Sem update-check remoto:** o identificador do Nexus do autor original foi
+   zerado — este build não faz nenhuma chamada de rede nem abre página de
+   terceiros.
+6. Branding das strings visíveis: **RDR2 Vulkan FG**.
 
-1. Jogo fechado. Na pasta do jogo, renomeie seu `RDR2VulkanFG.asi` atual (o
-   1.0beta) para `RDR2VulkanFG.asi.1.0beta.bak` — é o seu rollback.
-2. Copie este `RDR2VulkanFG.asi` para a pasta do jogo.
-3. No `RDR2VulkanFG.ini`, confira/adicione:
+## Instalação (troca 1 arquivo)
+
+1. Jogo fechado. Renomeie o `.asi` atual (v2) para `RDR2VulkanFG.asi.v2.bak` — rollback.
+2. Copie este `RDR2VulkanFG.asi` para a pasta do jogo. O coletor opcional vai em
+   `RDR2VulkanFG\RDR2VulkanFGDiagnostics.dll` (subpasta, como antes).
+3. No `RDR2VulkanFG.ini`, mantenha:
    ```ini
    FGProvider=XeSS
-   CapturePresentTransfers=1
-   DebugLogging=1
+   DebugLogging=0        ; 0 = menos custo; 1 = log detalhado (use 1 só na coleta)
    ```
-4. (uma vez só) confirme que o `RDR2VulkanFG\Streamline\` e
-   `RDR2VulkanFG\XeSS\` **do seu pacote 1.0beta** continuam lá — o 0.82 usa os
-   mesmos caminhos de runtime (se algo reclamar de versão de runtime, o rollback
-   no passo 1 é imediato).
+   (Os knobs novos têm padrão bom; não precisa escrever nada neles para o baseline.)
 
-## O que deve aparecer no log (RDR2VulkanFG.log)
+## Grade de testes da roda que pisca
 
-1. linha `config ...: ... CapturePresentTransfers=1` (prova de que a chave
-   foi lida);
-2. depois do `NGX inputs first valid`, a nossa linha nova
-   `HUD capture first success via present transfer: frame=NNN dstImage=0x...`;
-3. telemetria `XeSS telemetry: ... enabled=1` e frames gerados (FG-109/FG-201
-   ausentes).
+O flicker da roda de itens bate exatamente com a fraqueza conhecida do modo 4
+(*BACKBUFFER_HUDLESS*: a UI é extraída por diferença backbuffer-vs-hudless —
+a Intel documenta que UI semitransparente/animada sofre com isso). Rode cada
+config **numa sessão curta**, abra a roda de armas/itens, observe, e rode
+`collect-once.bat` antes de fechar:
 
-**Nunca** selecione DLSS-G / "Restart FG" no menu durante o teste: DLSS-G não
-roda em Arc e trava a sessão com FG-201.
+| Config INI | O que esperar | Diagnóstico |
+|---|---|---|
+| *(nada — baseline)* | modo 4 + composição ligada (estado de hoje: roda pisca) | controle |
+| `XeSSUiMode=1` | interpola o backbuffer **com** HUD embutido; sem composição. A roda é interpolada pelo modelo em vez de recomposta | se a roda parar de piscar mas **borrar** ao girar → confirma que o problema é a extração por dif; troca um artefato por outro |
+| `XeSSUiComposition=0` (com modo 4) | composição desligada: frames gerados **sem HUD nenhum** | esperado PIOR (HUD pisca sumindo) — só para confirmar a direção; não deixe ligado |
+
+Regras da grade: uma variável por sessão; anote qual INI usou; confira no log a
+linha `uiMode=... uiComposition=...` refletindo o pedido (ou o log de clamp).
+
+**Por que não `XeSSUiMode=3`/`5`?** São o caminho certo de verdade (mistura UI
+de verdade na composição — a mitigação que a própria Intel recomenda p/ UI
+semitransparente), mas precisam de uma textura UI que o jogo não expõe. O fork
+pode sintetizá-la no futuro (diff backbuffer−hudless como a OptiScaler faz com
+HUDFix) — a grade acima mede se esse investimento vale.
+
+## Menu e multiplicador
+
+O combo **Multiplier (2x/3x/4x)** existe e é relido a cada present — na sessão
+anterior nenhum clique/tecla chegou ao mod. Protocolo v3:
+1. Abra o jogo, espere estar renderizando mundo (não menu principal).
+2. Aperte a tecla do menu (`MenuKey`, padrão `-` do numpad) **com o jogo em
+   primeiro plano**. O log deve gravar `menu: open`.
+3. Se não abrir: clique 1x dentro da janela do jogo, depois `Alt+Tab` fora e de
+   volta, teste de novo — os diagnósticos vão dizer se o clique apareceu na fila
+   de mensagens do jogo ou se o hotkey foi rejeitado por foco.
+4. Não selecione DLSS-G nem "Restart FG": DLSS-G não roda em Arc.
 
 ## Honestidades
 
-- **Base 0.82, não 1.0beta:** você perde os recursos do beta (provider FSRFG
-  incluso — inútil na B390 mesmo: o FG-3xx "Three independent pacing queues are
-  unavailable" mostrou que o FidelityFX-FG Vulkan exige filas que o driver Intel
-  não expõe). O caminho que usamos (NGX inputs + XeSS bridge) existe idêntico
-  nos dois.
-- **HUD pode entrar na snapshot:** o blit entrega o quadro *como apresentado*.
-  Se o jogo já desenhou HUD, o FG interpola com HUD (risco de ghosting/halo no
-  HUD). A alternativa render-pass continua disponível (chave desligada =
-  comportamento original). Se ghosting aparecer, é isso — e é informação útil
-  pro Mor3a (relatório pronto em `NEXUS-REPORT-draft.md`).
-- Layout: tratamos o destino do blit como TRANSFER_DST (exigência da própria
-  API durante o blit) e o capture restaura o layout depois — as barriers do
-  jogo permanecem consistentes.
-- Compilado com zig **0.17.1** (o autor usa 0.16): mesmas flags, mesmos deps;
-  diferença de versão de toolchain declarada.
+- Base **0.82**, não 1.0beta — o beta trava com OptiScaler antes de qualquer
+  FG (nunca rodou). O caminho que usamos existe idêntico nos dois.
+- Build real: `zig c++ -target x86_64-windows-gnu` (zig **0.17.1**; o autor usa
+  0.16). Compila limpo; carrega/descarrega no Wine; **não rodou RDR2** aqui —
+  só a B390 prova.
+- O custo de performance observado (47→~36 reais) é o custo conhecido de
+  inferência a 1440p UW numa B390; nada segura para otimizar na parte aberta.
 
 ## Rollback
 
-Feche o jogo → apague este `.asi` → renomeie `RDR2VulkanFG.asi.1.0beta.bak` de
-volta para `RDR2VulkanFG.asi`. A ponte `zz_ngxbridge` não é tocada (continuei
-com ela — é ela que faz os inputs chegarem).
+Jogo fechado → apague este `.asi` → renomeie o `.bak` da v2 de volta. A ponte
+`zz_ngxbridge` não é tocada.
