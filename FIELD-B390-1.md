@@ -56,14 +56,30 @@ conhece FSRFG e migra FSR3→DLSSG). O binário 1.0beta adiciona FSRFG
 (FSR4/*dll no pacote) por cima; strings do caminho XeSS batem com o fonte
 público (FG input pipeline v2, MFG unlock, virtual swapchain).
 
-## Próximos passos testados/pendentes
+## Próximos passos — resultado (2026-11-07, fim do dia)
 
-1. (teste 1, custo zero) `FGProvider=FSRFG` no 1.0beta — suporte AMD novo
-   do beta, runtime FSR4 FG embutido, Vulkan agnóstico de GPU; ver se o
-   provider FSRFG exige haveHud.
-2. (se 1 falhar) patch público 0.82 em `hud_capture.cpp` CaptureCandidate
-   (aceitar fonte de blit/copy full-extent para imagem de swapchain como
-   HUD-less, ou relaxar LOAD/membros) + build MSVC na máquina do usuário —
-   com o aviso honesto: binário derivado do fonte público 0.82, sem FSRFG.
-3. relatório a Mor3a no Nexus com este log (eles development ativo; correção
-   da assinatura HUD-less sob OptiScaler Vulkan é deles).
+1. `FGProvider=FSRFG` no 1.0beta: **FALHOU na B390.** Erro no menu do
+   jogo (foto do usuário): FG-3xx "FSR Vulkan features unavailable ...
+   Three independent pacing queues are unavailable". FidelityFX-FG
+   Vulkan exige 3 filas de pacing independentes que o driver Intel não
+   expõe. Beco sem saída enquanto o driver não mudar; a rota XeSS+patch
+   é a única viável hoje.
+2. **FEITO** — patch `hud_capture.cpp` no fonte público 0.82 (chave
+   opt-in `CapturePresentTransfers=1`: blit/copy full-extent para
+   imagem de swapchain virtual conta como snapshot HUD-less; layout
+   TRANSFER_DST + restauração mantêm as barriers do jogo
+   consistentes). Compilado na máquina DEV em Linux (não precisou de
+   MSVC na máquina do usuário): `tools/build-mor3a-zig-linux.sh`, zig
+   **0.17.1** (o 0.16.0 do Build.ps1 tem libc++ windows-gnu quebrado
+   em host Linux; exige shim `Windows.h`→windows.h em
+   lib/libc/include/any-windows-any/). Baseline limpa compila
+   (d2adebe8…) e só o binário patchado contém as strings novas
+   (f375dede…); smoke Wine LoadLibrary/FreeLibrary OK. **Não validado
+   em jogo** — falta sessão na B390. Entrega:
+   `release-mor3a-hudless/` (README pt-BR com instalação/rollback,
+   patch, NEXUS-REPORT-draft.md, collect-once.bat de coleta única).
+3. relatório a Mor3a: **rascunho pronto** em
+   `release-mor3a-hudless/NEXUS-REPORT-draft.md` (inglês, pronto para
+   colar; cobre a assinatura HUD-less sob SR Vulkan de terceiros, o
+   FG-3xx das filas de pacing e a armadilha DLSS-G no menu em Arc).
+   Envio fica com o usuário (a conta Nexus é dele).
