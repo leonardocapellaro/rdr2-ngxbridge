@@ -1,9 +1,0 @@
-MESA-EGL: warning: pci id for fd 36: 10de:2684, driver (null)
-pci id for fd 37: 10de:2684, driver (null)
-pci id for fd 38: 10de:2684, driver (null)
-MESA-EGL: warning: egl: failed to create dri2 screen
-MESA-EGL: warning: pci id for fd 36: 10de:2684, driver (null)
-pci id for fd 37: 10de:2684, driver (null)
-pci id for fd 38: 10de:2684, driver (null)
-MESA-EGL: warning: egl: failed to create dri2 screen
-MESA-EGL: warning: pci id for fd 36: 10de:2684, driver (null)
