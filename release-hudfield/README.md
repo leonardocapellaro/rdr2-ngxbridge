@@ -1,6 +1,6 @@
-# RDR2 Vulkan FG — build `0.82+hudfield-v4` (B390 + OptiScaler)
+# RDR2 Vulkan FG — build `0.82+hudfield-v4.1` (B390 + OptiScaler)
 
-> Procure a tag **`hudfield-v4`** na primeira linha do `RDR2VulkanFG.log`.
+> Procure a tag **`hudfield-v4.1`** na primeira linha do `RDR2VulkanFG.log`.
 > Se ela não aparecer, o `.asi` antigo continua em uso.
 
 **O que este build é:** a base 0.82 do projeto (fonte pública, MIT — licença do
@@ -41,6 +41,9 @@ mecanismo.
    o erro residual fica a cargo do refinamento por extração do modo 5 (mitigação documentada
    da Intel para UI semitransparente). Experimental: o palpite de alfa só vale olho em
    hardware; com a chave em 0 o comportamento é idêntico ao v3.
+8. **Novo na v4.1:** com `XeSSSynthUI=0` (padrão) a pipeline de síntese e seu anel de staging
+   (≈60 MB de VRAM em 3440x1440) deixam de ser alocados — antes eram criados mesmo desligados.
+   Ajuste de strings de log; nenhum outro comportamento muda em relação à v4.
 
 ## Instalação (troca 1 arquivo)
 

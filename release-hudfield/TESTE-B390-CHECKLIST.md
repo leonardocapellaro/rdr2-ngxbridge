@@ -1,17 +1,17 @@
-# Teste na B390 — pacote v4 (marca no log: `hudfield-v4`)
+# Teste na B390 — pacote v4.1 (marca no log: `hudfield-v4.1`)
 
 ## Antes de tudo (1x só, jogo fechado)
 
 1. No PC da B390, baixe o zip do release:
-   https://github.com/leonardocapellaro/RDR2-Vulkan-FG/releases/tag/v0.82-hudfield-v3
-   Extraia em qualquer pasta (ex.: `Downloads\hudfield-v3`).
+   https://github.com/leonardocapellaro/RDR2-Vulkan-FG/releases/latest
+   Extraia em qualquer pasta (ex.: `Downloads\hudfield`).
 2. Na pasta do jogo: renomeie `RDR2VulkanFG.asi` → `RDR2VulkanFG.asi.v2.bak`.
 3. Copie o `RDR2VulkanFG.asi` do pacote pra pasta do jogo. O
    `RDR2VulkanFGDiagnostics.dll` do pacote vai na subpasta `RDR2VulkanFG\` da pasta do jogo.
 4. Abra `RDR2VulkanFG.ini` (mesma pasta do `.asi`) e deixe o bloco do teste BASELINE (abaixo).
 
 Caminho do log, sempre: `<pasta do jogo>\RDR2VulkanFG.log`. Toda sessão começa com a linha
-`... RDR2 Vulkan FG 0.82+hudfield-v4 ...` — se não aparecer, o `.asi` novo não está em uso.
+`... RDR2 Vulkan FG 0.82+hudfield-v4.1 ...` — se não aparecer, o `.asi` novo não está em uso.
 
 ## Como rodar cada teste (repetir os 4 passos)
 
@@ -24,7 +24,7 @@ Depois, me mande os zips (ou o caminho).
 
 ---
 
-## TESTE 1 — BASELINE (mesmo setting de 07/11, só pra confirmar a v3)
+## TESTE 1 — BASELINE (mesmo setting de 07/11, só pra confirmar a base)
 
 No INI, seção `[fgvk]`:
 ```ini

@@ -1,19 +1,20 @@
 # FIELD-B390-4 — plano da sessão de campo (uma sentada)
 
-Build: `0.82+hudfield-v4` (asi `01276362…`, zip `RDR2VulkanFG-hudfield-v4-B390.zip`). A v3 virou subconjunto da v4 (`hudfield-v4` = v3 + camada UI sintética opt-in).
-Pacote: `release-hudfield/` (também no release GitHub: `RDR2-Vulkan-FG` tag `v0.82-hudfield-v3`).
+Build: `0.82+hudfield-v4.1` (asi `4c70dc45…`, zip `RDR2VulkanFG-hudfield-v4.1-B390.zip`). A v3 virou subconjunto da v4 (`hudfield-v4` = v3 + camada UI sintética opt-in); a v4.1 só faz a síntese custar zero quando desligada.
+Pacote: `release-hudfield/` (também no release GitHub: `RDR2-Vulkan-FG` tag `v0.82-hudfield-v4.1`).
 
-## O que a v3 traz (resumo p/ quem vai testar)
+## O que o pacote traz (resumo p/ quem vai testar)
 
 - Diagnostics de input do menu (v2 preservados): `menu: open/close`, `menu input: left click…`, `hotkey: … ignored — foreground…`.
 - `XeSSUiMode` (1–5) e `XeSSUiComposition` (-1/0/1) no INI; log de criação mostra `uiMode=%u uiComposition=%d`; modos 2/3/5 com clamp logado p/ 4.
 - **v4:** `XeSSSynthUI=1` sintetiza a UI premultiplicada (compute B−(1−a)C) e libera modos 3/5 — TESTE 5 no checklist do pacote.
+- **v4.1:** com a síntese desligada (padrão) nada dela é alocado (economie ~60 MB de VRAM); strings de log corrigidas.
 - Update-check Nexus do autor original desligado (id=0).
 - Branding visível: "RDR2 Vulkan FG".
 
 ## Checklist da sessão (ordenado; ~30–40 min)
 
-1. Jogo fechado: backup `.asi` v2 → `.v2.bak`; copiar v3; ini baseline (leia o README do zip).
+1. Jogo fechado: backup `.asi` v2 → `.v2.bak`; copiar o `.asi` novo; ini baseline (leia o README do zip).
 2. Rodar 2–3 min em mundo aberto. Rode `collect-once.bat` ANTES de fechar o jogo? Não — rode logo após fechar (o script pega o log completo). Primeiro teste é o baseline:
    - a) menu abre com a tecla do MenuKey? (log `menu: open`?)
    - b) se abrir: trocar Multiplier p/ 4x → observar telemetria `displayed=` mudando em ~2x.
