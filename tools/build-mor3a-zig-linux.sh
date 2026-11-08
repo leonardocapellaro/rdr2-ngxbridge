@@ -11,8 +11,8 @@
 # Saída: <diretorio-saida>/RDR2VulkanFG.asi e RDR2VulkanFGDiagnostics.dll
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-ROOT="$(cd "$SCRIPT_DIR/../../../rdr2-vulkan-frame-generation" && pwd)"
-ZIG="${ZIG:-/tmp/zig-x86_64-linux-0.16.0/zig}"
+ROOT="$(cd "$SCRIPT_DIR/../../../RDR2-Vulkan-FG" && pwd)"
+ZIG="${ZIG:-$SCRIPT_DIR/../../../tools/zig-x86_64-linux-0.17.1/zig}"
 DEPS="$ROOT/.deps"
 OUT="${1:-$ROOT/.build-linux}"
 [ -x "$ZIG" ] || { echo "zig não encontrado em $ZIG (defina ZIG=)"; exit 1; }
