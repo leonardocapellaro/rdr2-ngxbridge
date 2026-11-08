@@ -81,3 +81,36 @@ have for the HUD-less problem — I can build the public source myself now
 
 Attachments to include when sending: `patches/hud-capture-present-transfer.patch`,
 the two logs, and (optionally) the zz_ngxbridge release zip.
+
+---
+
+**UPDATE after field test (same hardware, same night — FG now RUNS at 2x):**
+I rebuilt from your public 0.82 source and **the HUD-less capture matches**
+(`HUD capture first success: frame=61 ...` → `enabled=1`, `displayed=2`,
+~36 real / ~72 displayed fps at 3440x1440 on the B390). So the blocker above
+is specific to the **1.0beta binary**, which never matched the signature under
+the same OptiScaler delivery (`hud=0` forever, identical INI/setup). Likely a
+regression in the beta's capture gate for third-party Vulkan SR delivery —
+worth checking on your side. (My `CapturePresentTransfers` blit-capture patch
+ended up unnecessary in practice: 0 hits — the normal render-pass signature
+worked fine on 0.82. Keep or drop as you see fit.)
+
+Two follow-ups from the working run:
+1. **HUD flickers at 2x in the XeSS path.** FG's color input is the HUD-less
+   snapshot (xess_provider.cpp:706) and the SDK output has no HUD re-composite.
+   `HudMaskApply(real, hudless, generated)` (hud_mask.cpp:119) is exactly the
+   right mechanism — shader, output staging, barriers, all there — but I could
+   find **no caller** in the public 0.82 tree (only the header declares it).
+   Did the beta wire it in? If yes, is there any chance it lands in public
+   source? If not, it's the single biggest visual defect left: HUD/menus blink
+   at output frame rate while the 3D world is perfect.
+2. **No way to change the frame multiplier for XeSS at runtime in 0.82**: the
+   menu shows "Max multiplier: 4x" as read-only text (menu.cpp:475); the
+   preset/mode combos are DLSS-G-only. `DLSSGFrames` (INI, game off) works and
+   `XeSS MFG ... validated maximum=3 (4x)` logs, and the End hotkey should
+   cycle (`config.cpp` PollHotkeys) — but I couldn't get a single
+   `hotkey: generated frames ->` line, and there's no menu UI. A small frames
+   combo enabled for XeSS would fix both discoverability and reliability.
+
+Thanks either way — this is the first frame generation I've seen running on
+Intel Arc under Vulkan, on a real game.

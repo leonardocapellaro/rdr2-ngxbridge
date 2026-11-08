@@ -25,7 +25,7 @@ copy /y "%GAME%\RDR2VulkanFG.ini" "%OUT%\" >nul 2>nul
 if exist "%GAME%\RDR2VulkanFG\ngxbridge.log" copy /y "%GAME%\RDR2VulkanFG\ngxbridge.log" "%OUT%\" >nul 2>nul
 dir /b "%GAME%\RDR2VulkanFG.asi" "%GAME%\RDR2VulkanFG" > "%OUT%\arquivos-da-pasta.txt" 2>nul
 tasklist /m > "%OUT%\modulos-windows.txt" 2>nul
-systeminfo | findstr /B /C:"OS" /C:"BIOS" > "%OUT%\sistema.txt" 2>nul
+powershell -NoProfile -Command "Get-CimInstance Win32_OperatingSystem | Select-Object Caption,Version | Out-File -Encoding utf8 '%OUT%\sistema.txt'; Get-CimInstance Win32_VideoController | Select-Object Name,DriverVersion | Add-Content -Encoding utf8 '%OUT%\sistema.txt'"
 echo fim da coleta > "%OUT%\_fim.txt"
 
 powershell -NoProfile -Command "Compress-Archive -Path '%OUT%\*' -DestinationPath '%OUT%.zip' -Force"
