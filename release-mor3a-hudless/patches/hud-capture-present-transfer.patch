@@ -1,8 +1,16 @@
 diff --git a/src/config.cpp b/src/config.cpp
-index 3c9dff8..ee319c9 100644
+index 3c9dff8..67fe93b 100644
 --- a/src/config.cpp
 +++ b/src/config.cpp
-@@ -159,6 +159,7 @@ void LoadConfig(){
+@@ -58,6 +58,7 @@ bool PollHotkeys(){
+   }
+   bool gameFocused=false;auto foreground=GetForegroundWindow();DWORD foregroundPid{};if(foreground)GetWindowThreadProcessId(foreground,&foregroundPid);gameFocused=foregroundPid==GetCurrentProcessId();
+   bool toggle=Pressed(g_cfg.keyToggleFG,wT),cycle=Pressed(g_cfg.keyCycleFrames,wC);
++  if((toggle||cycle)&&!gameFocused)Log("hotkey: %s ignored — foreground window is not the game (vk=0x%x)",cycle?"cycle":"toggle",cycle?g_cfg.keyCycleFrames:g_cfg.keyToggleFG);
+   if(gameFocused && toggle){ g_rt.fgUserOff = !g_rt.fgUserOff; Log("hotkey: FG %s by user", g_rt.fgUserOff?"OFF":"ON"); changed=true; }
+   if(gameFocused && cycle && IsDX12Bridge(g_cfg.provider)){auto max=g_rt.maxFrames.load();g_rt.frames=g_rt.frames>=max?1:g_rt.frames+1;Log("hotkey: generated frames -> %u (x%u)",g_rt.frames,g_rt.frames+1);changed=true;}
+   if(changed){char path[MAX_PATH]{},value[16]{};IniPath(path,sizeof(path));snprintf(value,sizeof(value),"%u",g_rt.frames);WritePrivateProfileStringA("fgvk","DLSSGFrames",value,path);WritePrivateProfileStringA("fgvk","UserFGOff",g_rt.fgUserOff?"1":"0",path);}
+@@ -159,6 +160,7 @@ void LoadConfig(){
    c.tagHudless  = GetPrivateProfileIntA("fgvk","TagHUDLess",c.tagHudless?1:0,path)!=0;
    c.nativeHudProtection=GetPrivateProfileIntA("fgvk","NativeHUDProtection",1,path)!=0;
    c.tagUI       = GetPrivateProfileIntA("fgvk","TagUI",c.tagUI?1:0,path)!=0;
@@ -10,7 +18,7 @@ index 3c9dff8..ee319c9 100644
    c.antiTearing=ReadStabilityOption("AntiTearing",false);
    c.antiGhostHistory=ReadStabilityOption("AntiGhostHistory",true);
    { char v[32]{};GetPrivateProfileStringA("fgvk","DepthSeparation","",v,sizeof(v),path);if(v[0]){float f=(float)atof(v);if(f>=1.f&&f<=200.f)c.depthSeparation=f;} }
-@@ -182,8 +183,8 @@ void LoadConfig(){
+@@ -182,8 +184,8 @@ void LoadConfig(){
    g_rt.presentPacing=c.presentPacing; g_rt.fpsCap=c.fpsCap; g_rt.menuKey=c.menuKey;g_rt.depthSeparation=c.depthSeparation;
    g_rt.frames = c.dlssgFrames; g_rt.fgUserOff = GetPrivateProfileIntA("fgvk","UserFGOff",0,path)!=0;
    UpdateMenuRuntime(g_rt.fgUserOff,g_rt.frames);
@@ -33,6 +41,19 @@ index 02985aa..feea129 100644
    float depthSeparation = 10.f;  // sl::Constants minRelativeLinearDepthObjectSeparation; lower = stricter object separation at depth edges (anti-halo). 40 = Streamline default. INI: DepthSeparation
    bool     presentPacing = false; // optional extra GPU wait; off avoids duplicate serialization
    uint32_t fpsCap = 0;           // present-thread frame rate limit, 0 = unlimited
+diff --git a/src/dllmain.cpp b/src/dllmain.cpp
+index 444b987..04bf2e3 100644
+--- a/src/dllmain.cpp
++++ b/src/dllmain.cpp
+@@ -26,7 +26,7 @@ BOOL APIENTRY DllMain(HMODULE h, DWORD reason, LPVOID reserved) {
+     fgvk::SetDebugLogging(fgvk::Cfg().debugLogging);
+     if(!fgvk::Cfg().enabled){ fgvk::Log("FG disabled; native rendering, no diagnostic hooks"); return TRUE; }
+     if(!fgvk::Cfg().applicationId){ fgvk::Log("ApplicationId missing; refusing BG3 identity and leaving game untouched"); return TRUE; }
+-    fgvk::Log("mor3a RDR2 Vulkan FG %s; provider=%s; installing early hooks",fgvk::kModVersion,fgvk::Cfg().provider==fgvk::FGProvider::DLSSGBridge?"DLSSG DX12 bridge":fgvk::Cfg().provider==fgvk::FGProvider::XeSS?"XeSS experimental":fgvk::Cfg().provider==fgvk::FGProvider::FSR3?"FSR3":"DLSSG");
++    fgvk::Log("mor3a RDR2 Vulkan FG %s+hudfield-v2; provider=%s; installing early hooks",fgvk::kModVersion,fgvk::Cfg().provider==fgvk::FGProvider::DLSSGBridge?"DLSSG DX12 bridge":fgvk::Cfg().provider==fgvk::FGProvider::XeSS?"XeSS experimental":fgvk::Cfg().provider==fgvk::FGProvider::FSR3?"FSR3":"DLSSG");
+     // Simulation reaches the same graphics-start gate as a real AMD GPU.
+     // DllMain must never wait on or display the modal warning.
+     const bool inputsReady=!fgvk::Cfg().simulateUnsupportedAMD && fgvk::InstallEarlyNgxHooks();
 diff --git a/src/hud_capture.cpp b/src/hud_capture.cpp
 index c3322f3..4fd4333 100644
 --- a/src/hud_capture.cpp
@@ -127,3 +148,28 @@ index c3322f3..4fd4333 100644
    if(IsDX12Bridge(Cfg().provider)){
     if(!strcmp(name,"vkCreateRenderPass2")){realCreateRenderPass2=(PFN_vkCreateRenderPass2)fn;return (PFN_vkVoidFunction)WrapCreatePass2;}
     if(!strcmp(name,"vkCreateRenderPass2KHR")){realCreateRenderPass2KHR=(PFN_vkCreateRenderPass2)fn;return (PFN_vkVoidFunction)WrapCreatePass2KHR;}
+diff --git a/src/menu.cpp b/src/menu.cpp
+index b507f59..ab9306f 100644
+--- a/src/menu.cpp
++++ b/src/menu.cpp
+@@ -88,6 +88,8 @@ static BOOL WINAPI CursorClip(const RECT* rect){
+ }
+ static void Toggle(bool value){
+   if(open.exchange(value)==value)return;
++  // Diagnóstico de campo: sem esta linha nao sabemos se a tecla do menu chegou.
++  Log("menu: %s",value?"open":"close");
+   if(value)StartUpdateCheck(true);
+   std::lock_guard<std::mutex> lock(inputMutex);
+   if(value){GetCursorPos(&savedCursor);GetClipCursor(&desiredClip);hasClip=true;originalClipCursor(nullptr);}
+@@ -109,6 +111,11 @@ static const char* KeyName(int vk){
+   return buffer;
+ }
+ static LRESULT ProcessGameMessage(HWND w,UINT m,WPARAM a,LPARAM b){
++  // Uma linha por evento-chave, limitada: prova que o hook de mensagens ve o
++  // mouse/teclado do jogo (a pista de que clique no menu pode nao estar vivo).
++  static int seenClick=0,seenMove=0;
++  if(m==WM_LBUTTONDOWN&&seenClick<3){++seenClick;Log("menu input: left click observed in game queue (menu open=%d tid=%lu)",(int)open,(unsigned long)GetCurrentThreadId());}
++  if(m==WM_MOUSEMOVE&&seenMove<1){++seenMove;Log("menu input: mouse movement observed in game queue");}
+   if(captureMenuKey && m==WM_KEYDOWN){if((int)a!=VK_ESCAPE)SaveMenuKey((int)a);captureMenuKey=false;return 0;}
+   if(m==WM_KEYDOWN && (int)a==Rt().menuKey.load() && rendererAvailable){if(!(b&(1LL<<30)))Toggle(!open);return 0;}
+   if(m==WM_KEYUP && (int)a==Rt().menuKey.load())return 0;

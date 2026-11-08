@@ -96,21 +96,23 @@ ended up unnecessary in practice: 0 hits — the normal render-pass signature
 worked fine on 0.82. Keep or drop as you see fit.)
 
 Two follow-ups from the working run:
-1. **HUD flickers at 2x in the XeSS path.** FG's color input is the HUD-less
-   snapshot (xess_provider.cpp:706) and the SDK output has no HUD re-composite.
-   `HudMaskApply(real, hudless, generated)` (hud_mask.cpp:119) is exactly the
-   right mechanism — shader, output staging, barriers, all there — but I could
-   find **no caller** in the public 0.82 tree (only the header declares it).
-   Did the beta wire it in? If yes, is there any chance it lands in public
-   source? If not, it's the single biggest visual defect left: HUD/menus blink
-   at output frame rate while the 3D world is perfect.
-2. **No way to change the frame multiplier for XeSS at runtime in 0.82**: the
-   menu shows "Max multiplier: 4x" as read-only text (menu.cpp:475); the
-   preset/mode combos are DLSS-G-only. `DLSSGFrames` (INI, game off) works and
-   `XeSS MFG ... validated maximum=3 (4x)` logs, and the End hotkey should
-   cycle (`config.cpp` PollHotkeys) — but I couldn't get a single
-   `hotkey: generated frames ->` line, and there's no menu UI. A small frames
-   combo enabled for XeSS would fix both discoverability and reliability.
+1. **Frame-multiplier switching never reached the mod in my run.** The combo is
+   implemented for XeSS (menu.cpp, 2x/3x/4x labels, request encoding looks right, and
+   `Rt().frames` is re-read + `SetInterpolations` re-called every present, so runtime
+   switching should work). But my session log contains zero `menu:` / `hotkey:` lines — no
+   click or End-key event ever registered. My build now logs menu open/close, first clicks
+   seen in the game's message queue, and focus-rejected hotkeys to find where it drops;
+   happy to report which leg fails. (INI `DLSSGFrames` works fine as a fallback;
+   `XeSS MFG experimental unlock: validated maximum=3 (4x)`.)
+2. **Animated/translucent UI (RDR2's weapon and item wheels) flickers at 2x.** Static
+   HUD is fine, so the SDK's `XEFG_SWAPCHAIN_UI_MODE_BACKBUFFER_HUDLESS` compositing works
+   for opaque HUD; the semi-transparent animated radial wheels don't survive temporal
+   reconstruction on interpolated frames and blink. I considered wiring the orphaned
+   `HudMaskApply` (hud_mask.cpp:119, no callers in public 0.82) as an alternative and
+   concluded it cannot help here: generated frames never exist as a readable resource
+   (they are produced inside `Present()` on the D3D12 side), and masking the *input*
+   HUD-less color would smear HUD temporally instead. Any guidance on wheel artifacts
+   under BACKBUFFER_HUDLESS? (Or is `HudMaskApply` the abandoned precursor of exactly this?)
 
 Thanks either way — this is the first frame generation I've seen running on
 Intel Arc under Vulkan, on a real game.

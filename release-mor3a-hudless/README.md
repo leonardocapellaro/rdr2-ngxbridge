@@ -1,16 +1,20 @@
-# RDR2VulkanFG (0.82 + patch HUD-less-transfer) — para B390 + OptiScaler
+# RDR2VulkanFG 0.82+hudfield-v2 — para B390 + OptiScaler
 
-**Para que serve:** o seu 1.0beta prende em `HUD-less post-tone-map pass missing`
-com OptiScaler no caminho Vulkan: o XeSS bridge só aceita snapshot de um render
-pass que escreve **direto** nas imagens do swapchain virtual, mas o OptiScaler
-entrega o quadro final por **blit** — a assinatura nunca casa e o FG nunca liga
-(visto ao vivo nos seus logs: `input=725`, `enabled=0`). O patch adiciona a
-chave opt-in `CapturePresentTransfers=1`, que deixa o **blit full-extent para a
-imagem do swapchain virtual** contar como a snapshot do frame.
+> Build `0.82+hudfield-v2` (procure esta tag na primeira linha do log). v2 adds
+> pure-diagnostics (menu open/close, first clicks observed, focus-rejected hotkeys)
+> and keeps the opt-in transfer capture; zero behavior change otherwise.
+
+**Contexto honesto (pós-teste de campo):** o beta 1.0 prendia em
+`HUD-less post-tone-map pass missing` com OptiScaler (nunca rodava FG). O 0.82
+compilado deste fonte **funciona**: FG 2x validado na B390 (~36 reais → ~72
+exibidos). A correção de transfer (`CapturePresentTransfers=1`) permanece
+opt-in e inofensiva — em campo a assinatura normal já casou e ela não chegou a
+ser usada (0 hits). Esta v2 adiciona só diagnóstico: `menu: open/close`,
+primeiros cliques vistos na fila do jogo, hotkeys ignoradas por foco — pra
+descobrir por que os cliques/teclas de multiplicador não registraram.
 
 **O que é exatamente:** fonte público 0.82 do mod (GitHub, commit `bc853d0`) +
-nosso patch (`patches/hud-capture-present-transfer.patch`, 129 linhas, 3
-arquivos). Nada de NVIDIA/Intel/Rockstar; MIT.
+nosso patch (`patches/hud-capture-present-transfer.patch`, 175 linhas). Nada de NVIDIA/Intel/Rockstar; MIT.
 
 **Build real:** `zig c++ -target x86_64-windows-gnu` (zig 0.17.1; o autor usa
 0.16.0 — o 0.16 tem libc++ quebrado p/ windows-gnu em host Linux), deps nos
