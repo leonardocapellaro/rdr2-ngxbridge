@@ -1,7 +1,7 @@
 # FIELD-B390-4 — plano da sessão v3 (uma sentada)
 
 Build: `0.82+hudfield-v3` (asi `206fd35f…`, zip `RDR2VulkanFG-hudfield-v3-B390.zip`, sha `914c4780…`).
-Pacote: `release-hudfield-v3/` (vira `release/` na reorganização).
+Pacote: `release-hudfield-v3/` (também no release GitHub: `RDR2-Vulkan-FG` tag `v0.82-hudfield-v3`).
 
 ## O que a v3 traz (resumo p/ quem vai testar)
 
