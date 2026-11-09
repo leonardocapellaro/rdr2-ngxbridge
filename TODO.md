@@ -29,17 +29,21 @@ single 1-minute gameplay capture answer the question by itself.
       `XeSS interpolation target set:`.
 - [x] 09/11 v4.4 session: menu applies live (`interpolation target set: x4`
       from an in-game switch) and `createdInterp=3` — our side is DONE.
-- [ ] REMAINING (SDK-side): `displayed=2` at every requested count. Suspect
-      found: `XeSS output pacing: context ownership/mode rejected` in EVERY
-      session since 11/07 — the software pacer (built for 2x/3x/4x on Intel
-      without pacing queues) never bound; x2 works without it, x3 evidently
-      doesn't. v4.5 ships `reject detail` (witness stage + presenter mode
-      flags) + the unbound-batch breadcrumb + `interp=` telemetry.
-- [ ] Next session (consolidated v4.6 run replaces standalone TESTE 6): the
-      reject-detail line picks the pacer change; the breadcrumb line (present
-      or absent) localizes the clamp — both fire silently inside the one run.
+- [x] CLOSED v4.7 (SDK-side wall, root-caused 09/11 13:55 session): the
+      reject-detail line shows the pacer's witness reading DebugFill/code bytes
+      (`nativeOk=0(cccccccc…)`, `flagsHardware=233=0xE9`) — the MFG-Unlocker
+      pinned presenter layout does not match the field Intel binary, so the
+      pacer can never bind without RE on a closed vendor DLL (rejected on
+      safety/risk). With it unbound the SDK never batched >1 output (unbound
+      breadcrumb fired ZERO times across all sessions) — displayed=2 is the
+      SDK scheduler's own cap on this path.
+- [x] Decision (user, 09/11: "mode 1 only, remove the rest"): v4.7 pins the
+      multiplier to x2 (creation maxInterpolatedFrames=1, honest log + menu/
+      cycle reflecting the pin) and DELETES xess_output_pacing. Revisit only
+      if a future Intel driver/SDK update changes `maxInterpolations=`/
+      `displayed=` behavior — the creation log watches it for free.
 
-## P2 — Synthetic UI (XeSSSynthUI) validation — ITERATION 2 IN v4.3
+## P2 — Synthetic UI (XeSSSynthUI) validation — CLOSED v4.7 (removed; verdict below)
 - [x] v4.1 executed the pipeline end-to-end on hardware (armed + first-frame,
       no errors) — implementation runs.
 - [x] 08/11 follow-up: mode 5 + raw layer flickered the wheel WITH FG on
@@ -58,9 +62,15 @@ single 1-minute gameplay capture answer the question by itself.
       real frames) alternating with synthetic UI (magenta, on generated
       frames) — a coverage/edges mismatch problem, not noise, not alignment
       (that hypothesis died with the correction).
-- [ ] 5d folded into the consolidated v4.6 session (step 3: FG-off with the
-      wheel open — blinking must stop, pure white — plus step 4 quick
-      open/close x3 for ghosting). One run, no standalone session.
+- [x] 5d ANSWERED 09/11 13:55 session (consolidated run): FG off via numpad
+      `*` → blinking STOPS, pure white (field-confirmed; telemetry shows the
+      enabled=0 stretch). Mechanism proven: mode-3 flicker = real UI on real
+      frames vs our estimated UI on generated frames.
+- [x] FINAL FIELD VERDICT on the v4.6 estimator: "same blink" (user), now on
+      ALL UI incl. minimap = coverage expanded but the mismatch dominates —
+      offline noise metrics cannot capture the real limiter (structural
+      estimate-vs-real difference). Decision: synthetic UI + modes 2-5 + tint
+      REMOVED in v4.7; mode NONE is the shipped and only UI handling.
 - [x] SHIPPED EARLY in v4.6 (user directive: do not gate code on more field
       time; validate with local mocks instead): replaced `max channel delta ×2`
       with the two-sided per-pixel unmix of `B = a·U + (1−a)·C` —
@@ -69,8 +79,7 @@ single 1-minute gameplay capture answer the question by itself.
       vs synthetic ground truth: mae_ui 0.5569→0.1939, leak 0.0135→0.0096,
       EMA'd UI flicker 0.0133→0.0105, center bias halved. Field validation
       (consolidated session steps 2–4) still pending.
-- [ ] Optional: UI coverage/alpha stats via small readback so a future log
-      proves the layer's content quality without eyes-on.
+- (dropped v4.7: UI coverage/alpha readback — no UI layer to measure anymore)
 
 ## P3 — Defaults and docs
 - [ ] Fork default `XeSSUiMode` changed 4→1 (2026-11-08): mode 1 (NONE) is the

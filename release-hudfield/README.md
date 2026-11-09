@@ -1,262 +1,108 @@
-# RDR2 Vulkan FG — build `0.82+hudfield-v4.6` (B390 + OptiScaler)
+# RDR2 Vulkan FG — build `0.82+hudfield-v4.7` (B390 + OptiScaler) — STABLE CLEANUP
 
-> Look for the tag **`hudfield-v4.6`** on the first lines of `RDR2VulkanFG.log`.
-> If it does not appear, the old `.asi` is still the one in use.
+> Look for the tag **`hudfield-v4.7`** on the first lines of `RDR2VulkanFG.log`.
+> If it does not appear, an old `.asi` is still the one in use.
 
 **What this build is:** the 0.82 base of the original project (public source,
 MIT — the original author's license is intact in the repo's `LICENSE.txt`) plus
-our changes: frame-generation stability fixes, input/menu fixes, XeSS-FG UI
-knobs, and guards against configurations that would kill FG. No NVIDIA/Intel/
-Rockstar binaries here — only the `.asi` we compile and the diagnostics collector.
+our field fixes, **stripped down to what actually works on the B390**: frame
+generation 2x, the capture/activation stability fixes, input/menu fixes, and
+always-on health logging. Everything that field testing could not make good
+was removed — see below. No NVIDIA/Intel/Rockstar binaries here — only the
+`.asi` we compile and the diagnostics collector.
 
-**What is proven on real hardware (B390):** FG 2x works under native Vulkan with
-OptiScaler (~36 real fps → ~72 displayed at 3440x1440). The 2026-11-08 session
-also proved the fork's synthetic-UI pipeline runs end-to-end on the card
-(`armed → first frame` in the log, zero errors).
+**Proven on real hardware (B390, this exact feature set):** FG 2x under native
+Vulkan with OptiScaler (~36 real fps → ~72 displayed at 3440x1440), stable
+activation ~1 s after world rendering starts, no weapon-wheel flicker in mode
+NONE (the only configuration ever observed flicker-free), menu and hotkeys
+working.
 
-## What changed in v4.6 (new UI alpha estimator, validated offline before shipping)
+## What changed in v4.7 — the cleanup (your call, backed by our own data)
 
-Your correction ("it was only the wheel/minimap, blinking magenta ↔ white")
-replaced my wrong reading with a much better one: white = the game's real UI
-(real frames), magenta = our synthetic UI (generated frames) — mode 3's flicker
-IS the real-vs-synthetic mismatch. So v4.6 rewrites the alpha estimate before
-asking you for another field minute. What is new:
+v4.7 removes the two experimental programs that four B390 field sessions
+(07–11 through 09–11) proved unfixable with the data available:
 
-1. **Estimator replaced** (in `ui_diff.comp`): the old `max channel delta ×2`
-   heuristic is gone. It is now a two-sided unmix of `B = a·U + (1−a)·C` —
-   white-UI model `(B−C)/(1−C)` and dark-UI model `(C−B)/C`, max per pixel,
-   after a noise deadband (0.012 ≈ one σ of tone-map grain) with floors where
-   the unmix is ill-conditioned. The old heuristic did not see dark UI at all
-   (dark HUD blocks were alpha≈0) and leaked grain everywhere else.
-2. **Validated offline first**: `tools/sim-ui-estimator.py` builds a synthetic
-   scene with ground truth (wheel ring with AA edges, minimap, translucent
-   panel, dark block), per-frame independent capture noise on both inputs, and
-   scores variants. Winner vs the old heuristic: UI coverage error −66%,
-   background leak −29%, EMA'd UI flicker −21%, and opaque-UI centers land
-   ~2× closer to α=1 — where the generated frame reproduces the real one
-   *exactly and cannot flicker*. Honest limit: it is a synthetic scene
-   simulated in pure Python, not RDR2 and not the real GPU path; the field
-   still decides.
-3. **x3 status unchanged and honest**: v4.6 does NOT make x3 work; v4.5's
-   pacing forensics (`reject detail`, unbound-batch breadcrumb, `interp=`)
-   ride along and answer why in the same session as everything else.
-
-**One session now covers everything** — see `FIELD-TEST-B390.md`: one INI,
-about 5 minutes, and it answers x3's cause, the new estimator's look, and the
-mismatch mechanism together.
-
-## What changed in v4.5 (diagnostics for the two open mysteries — all ride along in v4.6)
-
-Your 09/11 noon session ran v4.4 (x3 INI + tint + menu) and solved one question
-and narrowed the other:
-
-**SOLVED — the synthetic UI texture IS used** (and your 09/11 correction made
-it even better news than first read). With `XeSSSynthDebugTint=1` in mode 3,
-**the UI elements themselves** (weapon wheel, minimap) blink **magenta ↔
-white**, not the whole screen. Two conclusions:
-1. Our layer is **UI-localized** — the estimator finds real UI and nothing
-   else. The earlier "whole-screen" reading was wrong and the snapshot
-   misalignment hypothesis died with it.
-2. The blink pattern is **the game's real UI (white, on real frames)
-   alternating with our composited synthetic UI (magenta, on generated
-   frames)** — mode 3's flicker was never capture noise: it is the mismatch
-   between what the game actually draws and what our estimate produces, per
-   alternating frame. Which makes the UI estimate's coverage the one battle
-   worth fighting (and TESTE 5d measures it: FG off via numpad `*` should
-   make ALL blinking stop — white only; on = magenta/white alternating).
-
-Nothing is "fixed" by this — tint stays available and off by default; mode 1
-remains the recommended default. But the next code step is now clearly aimed:
-make the synthetic UI match the real one in coverage/edges (proper per-pixel
-alpha unmix instead of `max channel delta ×2`).
-
-**OPEN — why 3x never displays.** Our side is now provably correct:
-`createdInterp=3` (creation ceiling fixed), the menu works live
-(`interpolation target set: x4` at 12:07:59 from your in-game switch), and
-`SetInterpolatedFrames` returns success — yet the SDK reports `displayed=2`
-everywhere. The prime suspect: our software output-pacer — the component built
-exactly for 2x/3x/4x on Intel cards without pacing queues — has logged
-`context ownership/mode rejected` in **every session since 11/07**, including
-the x2 ones. x2 works without it (the stock SDK path suffices); 3x+ apparently
-doesn't. v4.5 adds the forensics to end the guessing:
-- `reject detail ...` — the exact witness values the bind failed on (which
-  pointer stage, and the presenter's mode flags `intel/hardware/software`);
-- `SDK batch observed unbound; outputs=N` — if the stock SDK ever schedules
-  more than 2 outputs per batch, this fires (tells us whether the clamp is in
-  the SDK scheduler or downstream of the pacer);
-- telemetry now carries `interp=N` (what we asked) next to `displayed=N` (what
-  happened) — the old `requested=` was a boolean and misleading, sorry;
-- `SetInterpolations` is now edge-only (Intel's docs warn repeated calls may
-  recompile shaders; we were calling it every frame since v4.2).
-
-## What changed in v4.4 (multiplier un-ceilinged + menu double-toggle fix + tint experiment — all field-confirmed working in v4.5's session except the SDK-side x3 clamp)
-
-Your 08/11 night sessions (three configs, logs all self-reporting) found two
-hard bugs and one valid negative:
-
-1. **Multiplier was hard-capped at x2 — you were right.** The SDK swapchain was
-   created with `maxInterpolatedFrames=1` hardcoded, so no INI value or menu
-   setting could ever generate more than one extra frame (your x3 session shows
-   `DLSSGFrames=2 (x3)` read correctly yet `displayed=2` forever). v4.4 creates
-   the swapchain at the SDK maximum (your log proves the SDK supports 3 — up to
-   x4) and the runtime `SetInterpolations` picks the real count. Watch for the
-   new lines: `createdInterp=3` and `XeSS interpolation target set: x3 ...`, and
-   `displayed=3` in telemetry. INI and menu should both work; INI remains the
-   trusted path.
-2. **Menu F9 opened AND instantly re-closed itself (that's why the multiplier
-   menu "didn't work").** Your log: `hotkey: menu key F9 seen by present-loop
-   poll` → `menu: open` → 9 ms later the game's message queue delivered the SAME
-   physical press → `menu: close`. The v4.2 de-duplication only worked in one
-   direction. Fixed; every key line now carries `dedup=`.
-3. **Mode 3 + smoothing verdict is VALID** (FG was continuously on for ~105 s
-   after the ~77 s world-load mark — no confounding this time): the composited
-   wheel still flickered. Before assuming the alpha estimate is at fault, v4.4
-   ships a decisive test: **`XeSSSynthDebugTint=1`** paints our synthetic layer
-   magenta. In mode 3, a **magenta wheel on generated frames = the SDK is
-   compositing our texture** (then the estimate is the limiter, and the fix path
-   is a better alpha estimator). A wheel with **normal** colors = the tagged
-   texture is being ignored upstream (then no estimator work matters, and we go
-   after the wiring/SDK call instead). One session tells us which world we live in.
-
-Also confirmed from your logs: the activation speed fix worked — FG went live
-~1 s after world rendering started (was ~15 s). One residual: right when the
-wheel opens, one `HUD-less miss start ... lastReject=2` (extent) appears — the
-game's wheel variant changes the render extent, the capture correctly refuses to
-stale-match, and FG dips for ~5 s. Known, by-design-safe; noted for the matcher.
-
-## What changed in v4.3 (synthetic UI temporal smoothing + mode 3 — still in this build)
-
-Your 2026-11-08 night report: **mode 5 (`XeSSSynthUI=1` + `XeSSUiMode=5`) still
-flickered the weapon wheel — and this time with FG demonstrably on** (the log
-shows FG enabled from +87 s to the end of the session, wheel opened inside that
-window). That verdict is real, and it is informative: the synthetic layer
-computes `B − (1−a)·C` from the exact same pair the SDK's mode-4 extraction uses
-— so its alpha estimate carries the same noise Intel documents for translucent
-UI, and mode 5 even re-applies the backbuffer extraction on top ("refine by
-extracting"). Two changes:
-
-1. **Temporal smoothing (EMA) of the synthetic layer — `XeSSSynthSmooth`**
-   (0–100, default 35 = new-frame weight). A stationary UI (wheel, minimap)
-   converges in ~2–3 frames while the per-frame alpha-estimation noise averages
-   out; vanished UI fades to hard zero (no ghost tail). The accumulator restarts
-   on provider history resets. `0` restores the raw v4.2 behaviour.
-2. **Mode 3 is now the primary UI experiment** (`HUDLESS_UITEXTURE`: "interpolate
-   HUD-less color, blend UI from UI texture"). Unlike 4/5 it does **no backbuffer
-   extraction at all** — the wheel can only come from our (now smoothed) UI
-   texture. If the flicker is extraction noise, mode 3 removes its source; if it
-   survives mode 3, the synthetic estimate itself is the limiter and we know it
-   from one session.
-
-## What changed in v4.2 (the "why does FG keep dropping" fix — still in this build)
-
-Analysis of the 2026-11-08 field logs (`FIELD-B390-5.md` in the project repo)
-showed frame generation was actually **on only ~16% of the session** (and only
-~45% of the 11/07 session) because the bridge disables FG whenever the HUD-less
-snapshot is missing for >500 ms. Two real bugs in that path are fixed:
-
-1. **HUD-less epoch race (root cause).** The capture stamp was inferred from the
-   *current* frame counter at query time. RDR2 renders 2+ frames ahead of
-   presenting; when the weapon wheel stalls the render thread, the present for
-   frame N looked up frame N+1's counter, decided "capture missing" — while the
-   capture had actually succeeded — and dropped FG for seconds. The capture is
-   now stamped with its own acquire window at record time. This is strictly
-   *safer* than before: it also closes a latent hole where an old capture could
-   be accepted for a newer frame.
-2. **Render-pass marking inconsistency.** The v1 render-pass hook marked color
-   attachments only in subpass 0, while the RenderPass2 hook marked all subpasses;
-   a final full-screen pass referenced only from subpass >0 (a known weapon-wheel
-   / menu pattern) could be permanently invisible to the capture. Marking is now
-   consistent (all other safety gates unchanged: exact extent, format, LOAD,
-   real initial layout, swapchain image, single sample).
-
-**Menu keys (multiplier) — fixed and self-proving.** Earlier logs showed mouse
-messages reaching the game queue but *zero* keyboard lines — there was no
-keyboard logging on that path at all, and the menu-key toggle was additionally
-gated behind the overlay renderer being initialized. Now: the toggle no longer
-waits for the renderer, an independent poll (GetAsyncKeyState, every present,
-de-duplicated against the queue path) catches the key even if the game's
-message queue never delivers keyboard messages, and every menu-key press prints
-an always-on log line (`menu input: menu key F9 observed…` or
-`hotkey: menu key … seen by present-loop poll`).
-
-**Always-on FG health lines.** Even with `DebugLogging=0` you now get:
-`XeSS eligibility: … eligible=1/0 …` on every FG on/off flip,
-`HUD-less miss start/end` with a reject code explaining why the capture was
-rejected, and the menu proof lines. A single 2-minute gameplay capture now
-answers "was FG even on?" without guessing.
-
-**Fork default changed: `XeSSUiMode=1`** (was 4). Mode 1 (NONE — the whole
-backbuffer, HUD included, is interpolated) was the only configuration observed
-flicker-free on the B390 weapon wheel; Intel documents mode 4's backbuffer
-extraction as weak against semi-transparent UI. You can still pick 2–5 in the
-INI.
-
-## About the stutter you felt (mode 1)
-
-Most likely it is exactly what the logs show: FG dropping to native 36 fps and
-back ("stutter" is the 72→36→72 flapping), which has been happening in every
-session — including the one that "worked". Also note: in mode 1 composition is
-already off by design (Intel's auto rule); **do not** set
-`XeSSUiComposition=1` with mode 1 — that asks the SDK for UI compositing work
-mode 1 does not use. Leave the knob at `-1` (or remove the line). The v4.2
-fixes attack the drops directly; the new log lines correlate stutters with FG
-flips.
+1. **UI modes 2–5 and the synthetic UI layer are gone.** The full chain of
+   evidence: the tint test proved the SDK composites our reconstructed UI
+   layer; the FG-off ablation proved the mode-3 flicker is the game's real UI
+   (real frames) alternating with our estimated UI (generated frames); and the
+   new alpha estimator (v4.6, offline-validated −66% coverage error against a
+   synthetic ground truth) **did not reduce the blink in the field** — you
+   confirmed "same thing". A reconstructed UI layer can approach the game's
+   real UI but never match it, so composited modes always blink at the frame
+   rate. UI handling is now fixed to mode NONE (whole-frame interpolation —
+   exactly what mode 1 did), composition off. The INI keys `XeSSUiMode`,
+   `XeSSUiComposition`, `XeSSSynthUI`, `XeSSSynthSmooth`, `XeSSSynthDebugTint`
+   are recognized one last time only to log that they were removed; delete the
+   lines when convenient.
+2. **x3/x4 pinned to x2, software pacer deleted.** Our side of the multiplier
+   was provably correct in every session since v4.4 (creation at the SDK max,
+   live menu, `interp=` telemetry, successful SDK calls) — yet the SDK
+   displayed 2 every single enabled second, and the final 09/11 forensics
+   localized why: the software output pacer's identity witness reads
+   DebugFill/code bytes (`0xCCCC…`, `0xE9`) at the pinned presenter offsets —
+   the layout does not match the field Intel binary, so it can never bind
+   without reverse-engineering a closed-source vendor DLL (unacceptable risk),
+   and without it the SDK scheduler never presents more than one interpolated
+   frame (the unbound-batch breadcrumb never fired across all sessions).
+   `DLSSGFrames>1` now logs once and pins to x2; the menu shows only x2.
+3. **What stays:** everything that fixed real problems — the HUD-less epoch
+   race fix, render-pass marking consistency, menu double-toggle fix, the
+   always-on FG health lines (`XeSS eligibility`, `HUD-less miss`,
+   `displayed=`), hotkey proof lines, ShowFPS, and the v4.6
+   two-sided alpha estimator's source lives on in git history in case a future
+   SDK makes it salvageable.
 
 ## Installation (one file swap)
 
-1. Game closed. Rename the current `.asi` (v4.5) to `RDR2VulkanFG.asi.v45.bak` — rollback.
+1. Game closed. Rename the current `.asi` (v4.6) to `RDR2VulkanFG.asi.v46.bak` — rollback.
 2. Copy this `RDR2VulkanFG.asi` into the game folder. The optional collector goes
    to `RDR2VulkanFG\RDR2VulkanFGDiagnostics.dll` (subfolder, as before).
-3. In `RDR2VulkanFG.ini`, keep:
+3. In `RDR2VulkanFG.ini`, the daily-driver config is just:
    ```ini
    FGProvider=XeSS
-   DebugLogging=0        ; 0 = less overhead; 1 = detailed logging (use 1 only while collecting)
+   DebugLogging=0
    ```
-   The new defaults are the recommended baseline — no new keys needed. To use
-   more generated frames per real frame, set `DLSSGFrames=2` (3x) or
-   `DLSSGFrames=3` (4x) — the menu Multiplier should work now (MenuKey per INI),
-   but the INI path is the trusted one.
+   Delete the old diagnostic lines (`DLSSGFrames` — now ignored, `XeSSUiMode`,
+   `XeSSSynthUI`, `XeSSSynthDebugTint`, `XeSSUiComposition`); the build works
+   without them and logs a one-time notice if they are present.
 
-## Field protocol v3: ONE consolidated session (replaces the old test grid)
+## Quick regression (optional, 2 minutes)
 
-You said it straight — no time for a research expedition — so v4.6 folds every
-open question into a single ~5-minute run: one INI (x3 + mode 3 + tint), one
-route (play → wheel → FG-off → wheel again), one `collect-once.bat`. The
-pacing diagnostics fire silently in that same session; the tint route judges
-the new estimator; the FG-off step confirms the mismatch mechanism. Exact
-steps and INI: **`FIELD-TEST-B390.md`** in this zip. After the run, if you
-want the game back to the comfortable daily driver, delete the diagnostic
-lines and go back to mode 1 defaults (`FGProvider=XeSS` + `DebugLogging=0`).
-
-Rules that still hold: the `hudfield-v4.6` tag must appear at the top of the
-log; verify the creation line `... uiMode=%u uiComposition=%d` matches what
-you set; always run `collect-once.bat` after closing the game (only the last
-session lands in a zip if you skip it).
+No test protocol — just play 2 minutes. The log should show:
+- `hudfield-v4.7` at the top, `uiMode=NONE (fixed, no composition)` in the
+  creation line, `createdInterp=1`;
+- `XeSS eligibility: … eligible=1` within seconds of entering the world, and
+  telemetry `interp=1 … displayed=2` while FG is on;
+- no wheel flicker (there is no UI composition code left to flicker).
+If anything is off, run `collect-once.bat` after the game closes and send the
+zip — the health lines will localize it.
 
 ## Honest notes
 
 - Base is **0.82**, not 1.0beta — the beta never reaches FG under OptiScaler
   (it fails its HUD-less gate before the first interpolated frame; closed
   source). The path we use exists identically in both.
-- Real build: `zig c++ -target x86_64-windows-gnu` (zig **0.17.1**; the author
-  uses 0.16). Compiles clean; loads/unloads under Wine; **it does not run RDR2
-  here** — only the B390 proves it.
-- The HUD-less capture matcher is the original author's design; v4.2 fixes a
-  race and an inconsistency in it but does not redesign it. If the new
-  `HUD-less miss start ... lastReject=N` lines show `5` (loadOp) or `6`
-  (UNDEFINED layout) during normal gameplay, the remaining stalls are matcher
-  strictness by design — report the code, and the next step is known.
-- Synthetic UI alpha is an estimate — v4.6 replaced `max channel delta ×2`
-  with the two-sided unmix described at the top (offline-validated in
-  `tools/sim-ui-estimator.py`: −66% UI coverage error, −29% background leak
-  on a synthetic ground-truth scene with capture noise). It is still an
-  estimate: the 08/11 night sessions and the 09/11 tint blink prove the field
-  flickers, and only the B390 decides how much the new math wins. Temporal
-  EMA (`XeSSSynthSmooth=35` default) and mode 3 (no extraction) stay on top.
-  Edge quality still needs eyes. With `XeSSSynthUI=0` (default) nothing of it
-  is allocated.
+- Real build: `zig c++ -target x86_64-windows-gnu` (zig **0.17.1**). Compiles
+  clean; loads/unloads under Wine; **it does not run RDR2 here** — only the
+  B390 proves it.
+- **x2 only, by evidence, not by laziness**: every layer of our own multiplier
+  stack was verified working; the wall is inside Intel's closed presentation
+  scheduler when the pacing hook cannot bind. A future Intel driver/SDK update
+  could change that — the `maxInterpolations=` field in the creation log
+  reports the SDK's advertised capability every session, so a change is free
+  to detect.
+- The HUD-less capture matcher is the original author's design; v4.2 fixed a
+  race and an inconsistency in it but did not redesign it. `HUD-less miss
+  start ... lastReject=N` lines during normal play still localize stalls
+  (5=loadOp appeared in the 09/11 session — known, by-design strict; the miss
+  window self-heals). `lastReject=2` at the moment the wheel opens is expected
+  extent-change behavior.
+- Removed features are not "broken" as shipped code — they are gone. To fight
+  for them again you need a different SDK, a game-provided UI texture, or
+  vendor internals we cannot responsibly touch.
 
 ## Rollback
 
-Game closed → delete this `.asi` → rename `RDR2VulkanFG.asi.v45.bak` back. The
+Game closed → delete this `.asi` → rename `RDR2VulkanFG.asi.v46.bak` back. The
 `zz_ngxbridge` shim is untouched.

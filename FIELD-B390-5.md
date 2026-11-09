@@ -182,3 +182,35 @@ lines fire in the same run. **FIELD-TEST-B390.md v4.6 replaces the whole test
 grid with ONE ~5-minute session** (x3 INI + mode 3 + tint; play → wheel →
 FG-off → wheel ×3 → collect-once). One zip answers x3's cause, the estimator's
 look, and the 5d mechanism question together.
+
+## Addendum 5 — v4.6 consolidated session (09/11 13:55, coleta-20261109-135553): both programs CLOSED, v4.7 cleanup
+
+Field report (user): new estimator = "mesma coisa" — blinking everywhere UI
+(now including minimap: coverage expanded as the sim predicted, mismatch still
+dominates); FG off → pure white, blinking stops (mechanism confirmed); no
+ghost seen under the blink storm.
+
+**x3 — root cause found and it is a wall, not a bug** (first run where the
+new forensics all fired):
+- `reject detail magicOk=1 implOk=1 chainOk=1 presenterOk=1 nativeOk=0(cccccccccccccccc) deviceOk=0(cccccc001c49abe9) flagsIntel=0 flagsHardware=233 flagsSoftware=171`
+  → the chain IS found, but the deeper witness fields read **MSVC DebugFill
+  (0xCCCC…) and code bytes (0xE9/0xAB)** — the MFG-Unlocker-pinned presenter
+  layout does not exist in the field Intel binary; the pacer can never bind
+  without reverse-engineering a closed vendor DLL. Rejected on safety.
+- `SDK batch observed unbound` breadcrumb: **zero hits in every session** →
+  the SDK scheduler itself never batches >1 output unbound. `interp=2` ×26
+  enabled samples, `displayed=2` 100% — clamp is inside Intel's path.
+- Note: `DLSSGFrames` creation actually follows `shared_bridge_runtime.h`
+  (wrapper passes MaxInterpolations()); provider's interpCap was cosmetic.
+  Both pinned to 1 now.
+
+**Decision (user's ultimatum: fix now or mode 1 only):** no responsible path
+to x3 or to a match-perfect UI layer exists with our data → v4.7 removes
+synthetic UI (ui_synth + shaders + all 5 knobs → mode NONE fixed), removes
+xess_output_pacing, pins multiplier to x2 (honest log/menu/cycle). Kept all
+v4.2 fixes + health lines. Fork 664ef7d; asi c1dcd522; dll 33871233; zip
+e9f61be8; release v0.82-hudfield-v4.7 (latest), v4.6 superseded.
+Also from this session: two `lastReject=5` (loadOp) misses in normal play —
+known by-design strict, self-heals; extent matcher stays backlog.
+Missing input: user mentioned a second zip ("extra") — never arrived on disk
+(only 135553 exists, duplicate copies identical sha 610ccd2d).
