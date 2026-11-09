@@ -4,32 +4,40 @@ Priorities after the 2026-11-08 field session (see FIELD-B390-5.md). No more
 "run-a-test-send-back" cycles: every change ships with log lines that make a
 single 1-minute gameplay capture answer the question by itself.
 
-## P0 — HUD-less snapshot stall (the real defect)
-- [ ] The bridge drops FG whenever the post-tone-map HUD-less capture misses
-      >500 ms. Measured FG uptime: ~45% (07/11, author's .asi) vs ~16%
-      (08/11, v4.1). All earlier mode comparisons were confounded by this.
-      Fix per investigation report; keep the never-stale-frame rule intact.
-- [ ] Add always-on INFO lines: FG enabled/disabled state flips and
-      hudless-miss/recovered (visible with DebugLogging=0).
+## P0 — HUD-less snapshot stall (the real defect) — FIXED IN v4.2, FIELD VALIDATION OPEN
+- [x] Epoch race fixed (capture stamped at record time) + subpass-marking
+      consistency in v4.2, with the never-stale-frame rule intact.
+- [x] Always-on forensics shipped in v4.2: `XeSS eligibility:` flips,
+      `HUD-less miss start/end` + `lastReject` code (visible with DebugLogging=0).
+- [ ] Confirm in the next B390 session: FG uptime should approach 100% in-world;
+      08/11 evidence says the stall was 15 s of never-matching capture after
+      world start — watch `lastReject=` values if any miss lines remain
+      (5=loadOp / 6=UNDEFINED layout would mean matcher strictness by design).
 
-## P1 — Menu multiplier dead on keys
-- [ ] Field log proves mouse messages reach the game queue (observed lines) but
-      keyboard produces nothing at all — not even a rejection line. Fix key
-      path per investigation report; add an always-on "key seen" proof line.
-- [ ] Interim user workaround (documented in release guide): set
-      `DLSSGFrames=2` (3x) / `DLSSGFrames=3` (4x) in the INI instead of menu.
+## P1 — Menu multiplier dead on keys — FIXED IN v4.2, FIELD VALIDATION OPEN
+- [x] Toggle un-gated from renderer init, GetAsyncKeyState poll backstop with
+      500 ms dedup, always-on proof line per press (queue or poll path).
+- [ ] Next session: F9 must print either the queue line or the poll line; if it
+      still does not open the overlay, the proof line localizes the failure.
+- [ ] Workaround still documented: INI `DLSSGFrames=2` (3x) / `3` (4x).
 
-## P2 — Synthetic UI (XeSSSynthUI) validation
-- [ ] v4.1 executed the pipeline end-to-end on hardware (armed + first-frame
-      lines, no clamps, no errors) — implementation runs; VALUE unproven
-      because FG was mostly off during observation.
-- [ ] Consider temporal smoothing of the UI layer (EMA against the previous
-      staged layer) so the tagged layer itself stops inheriting per-frame
-      extraction noise from B−C.
+## P2 — Synthetic UI (XeSSSynthUI) validation — ITERATION 2 IN v4.3
+- [x] v4.1 executed the pipeline end-to-end on hardware (armed + first-frame,
+      no errors) — implementation runs.
+- [x] 08/11 follow-up: mode 5 + raw layer flickered the wheel WITH FG on
+      (user-observed inside a log-verified enabled window). Verdict: raw layer
+      insufficient — it re-derives the same extraction the SDK does.
+- [x] EMA smoothing shipped in v4.3 (`XeSSSynthSmooth`, 0–100, default 35;
+      accumulator resets with provider history; log shows `smoothing=1`).
+- [ ] NEXT FIELD RUN: TESTE 5 = mode 3 (no extraction at all) + smoothing;
+      TESTE 5b = ablation with smoothing off. Judge only inside long
+      `eligible=1` stretches. Outcomes:
+      mode 3 clean → new default candidate + ship guidance;
+      mode 3 clean but 5b flickers → smoothing proven as the mechanism;
+      mode 3 still flickers → the alpha estimate itself is the limiter →
+      next step is a better estimator (multi-channel least squares, edge-aware).
 - [ ] Optional: UI coverage/alpha stats via small readback so a future log
       proves the layer's content quality without eyes-on.
-- [ ] Re-test mode 3/5 ONLY in a session where FG uptime is proven high by the
-      new INFO lines.
 
 ## P3 — Defaults and docs
 - [ ] Fork default `XeSSUiMode` changed 4→1 (2026-11-08): mode 1 (NONE) is the

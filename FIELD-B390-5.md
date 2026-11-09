@@ -56,3 +56,25 @@ eligibility` lines fire only on flips.
 - Collection protocol fix: `collect-once.bat` must grab ALL rotated logs
   (`RDR2VulkanFG*.log`), and the guide must insist: run it after EVERY game
   session (each config = its own zip), otherwise we only ever see the last run.
+
+## Addendum (same day, after the user's follow-up) — TESTE 5 verdict corrected
+
+The "verdict void" call was wrong and the user's correction is accepted: they
+opened the weapon wheel right after FG first activated (~+87 s) — INSIDE the
+enabled=1 window that lasts until the session end (7/44 telemetry samples
+enabled=1, all at the tail; zero drops after activation). So:
+
+- **Real verdict: `XeSSSynthUI=1` + `XeSSUiMode=5` flickers the wheel even with
+  FG genuinely on.** The synthetic layer runs but is not sufficient.
+- Structural explanation: our layer estimates alpha from the same (backbuffer,
+  HUD-less) pair the SDK's mode-4/5 extraction uses, so it carries the same
+  noise on translucent UI; mode 5 additionally "refines by extracting" from the
+  backbuffer, layering the known weak spot on top.
+- **Activation delay forensics** ("FG took forever to read inputs and turn on"):
+  0→+68.8 s the game had not started SR evaluation at all (loading/menu —
+  `NGX EvaluateFeature hook live` at +68.8 s) — not our latency;
+  +68.8→+85 s the HUD-less matcher had not yet accepted any capture (the stall
+  class fixed in v4.2); from +85 s FG ran without a single drop.
+- Consequence: v4.3 adds EMA smoothing (`XeSSSynthSmooth`, default 35) and makes
+  **mode 3** (no extraction at all) the primary experiment, with a smoothing-off
+  ablation row. Mode 5 kept only as a reference row.
