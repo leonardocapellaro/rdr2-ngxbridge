@@ -27,8 +27,16 @@ single 1-minute gameplay capture answer the question by itself.
       maxed at 2 all session). Fixed v4.4: create at `sdk.MaxInterpolations()`
       (card reports 3 → x4 possible), log `createdInterp=` and
       `XeSS interpolation target set:`.
-- [ ] Next session (v4.4): TESTE 2 menu stays open + switches live; TESTE 3
-      INI x3 must show `createdInterp=3` + `displayed=3`.
+- [x] 09/11 v4.4 session: menu applies live (`interpolation target set: x4`
+      from an in-game switch) and `createdInterp=3` — our side is DONE.
+- [ ] REMAINING (SDK-side): `displayed=2` at every requested count. Suspect
+      found: `XeSS output pacing: context ownership/mode rejected` in EVERY
+      session since 11/07 — the software pacer (built for 2x/3x/4x on Intel
+      without pacing queues) never bound; x2 works without it, x3 evidently
+      doesn't. v4.5 ships `reject detail` (witness stage + presenter mode
+      flags) + the unbound-batch breadcrumb + `interp=` telemetry.
+- [ ] Next session (TESTE 6): the reject-detail line picks the pacer change;
+      the breadcrumb line (present or absent) localizes the clamp.
 
 ## P2 — Synthetic UI (XeSSSynthUI) validation — ITERATION 2 IN v4.3
 - [x] v4.1 executed the pipeline end-to-end on hardware (armed + first-frame,
@@ -43,11 +51,16 @@ single 1-minute gameplay capture answer the question by itself.
       mode 1. Two irreducible possibilities remain — the composite may ignore
       our tagged texture entirely, or the alpha estimate is bad — and no
       further estimator work is worth it before knowing which.
-- [x] v4.4 ships the decisive experiment: `XeSSSynthDebugTint=1` paints the
-      layer premultiplied magenta. Mode 3 + tint=1, FG-on frames: magenta
-      wheel → consumed (fix the estimator: multi-channel least squares /
-      edge-aware); normal-color wheel → ignored upstream (fix the wiring).
-- [ ] Next session: TESTE 5c (tint). Its answer picks the next code change.
+- [x] TESTE 5c ANSWERED 09/11 (v4.4 tint session): the whole game went
+      MAGENTA in mode 3 → the SDK composites our texture. New sharper fact:
+      the layer covers everything, not just UI — hypothesis: the HUD-less
+      snapshot and the backbuffer are time-misaligned under camera motion, so
+      the diff contains the moving world. The estimator question is on hold
+      until alignment is excluded.
+- [ ] TESTE 5d (next session): wheel open, camera dead-still 15 s vs pan 15 s
+      with tint on. UI-only magenta when still → fix snapshot alignment/
+      pairing; magenta even still → rework the layer concept (or keep
+      XeSSSynthUI off and mode 1 as the recommendation).
 - [ ] Optional: UI coverage/alpha stats via small readback so a future log
       proves the layer's content quality without eyes-on.
 
