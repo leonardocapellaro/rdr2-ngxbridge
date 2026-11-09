@@ -111,3 +111,28 @@ and INI alike. Logs:
   for the matcher; not relaxed.
 - Session inventory: 23:43 mode 3 (previous.log of coleta-235027), 23:48 mode 4
   (shared log between the two zips), 23:51 mode 1. All three zips uploaded.
+
+## Addendum 3 (2026-11-09 noon) — v4.4 field session: tint ANSWERED, x3 clamp localized to SDK/pacing side
+
+Sessions 12:02 (mode 1, x3 INI + menu to x4 live) and 12:10 (mode 3 + tint), both
+v4.4 (`createdInterp=3` present):
+
+- **Decisive tint test: MAGENTA EVERYWHERE** (user report + `tint=1` in log). The
+  SDK composites our synthetic UI texture in mode 3. The layer is consumed; the
+  estimator question is replaced by a sharper one: why does the layer cover the
+  whole screen? Working hypothesis: HUD-less snapshot and backbuffer are
+  time-misaligned during camera motion, so `B−(1−a)·C` diffs the moving world,
+  not just UI. TESTE 5d (wheel + camera dead-still vs pan) separates the two.
+- **x3 status: our side is now provably correct** — `interpolation target set: x3`
+  at attach and `x4` at 12:07:59 (the menu path WORKS now), `SetInterpolatedFrames`
+  succeeds, yet `displayed=2` for the whole enabled stretch and the telemetry
+  histogram shows never >2. (`requested=` was a boolean — misleading, fixed.)
+- **New root-cause candidate found in old logs**: `XeSS output pacing: context
+  ownership/mode rejected` appears in EVERY session since 11/07 (checked all five
+  collected sessions) — the software pacer built for 2x/3x/4x on Intel cards has
+  never bound. x2 needs no pacer; >x2 evidently does. v4.5 adds `reject detail`
+  (witness stage + intel/hardware/software mode flags read from the presenter)
+  and the unbound-batch breadcrumb (`outputs=N` if the stock SDK ever schedules
+  multi-frame batches) to finish the localization in one more session.
+- v4.5 also makes `SetInterpolations` edge-only (was every present — Intel perf
+  note; also was resetting the cadence estimator each frame).

@@ -1,4 +1,4 @@
-# B390 field test — package v4.4 (log tag: `hudfield-v4.4`)
+# B390 field test — package v4.5 (log tag: `hudfield-v4.5`)
 
 Run ONE config per game session. After EVERY session: close the game, then
 double-click `collect-once.bat` (it grabs ALL logs now — if you only run it at
@@ -9,14 +9,14 @@ the end, only the last session ever lands in a zip).
 1. On the B390 PC, download the zip from the release:
    https://github.com/leonardocapellaro/RDR2-Vulkan-FG/releases/latest
    Extract anywhere (e.g. `Downloads\hudfield`).
-2. In the game folder: rename `RDR2VulkanFG.asi` → `RDR2VulkanFG.asi.v43.bak`.
+2. In the game folder: rename `RDR2VulkanFG.asi` → `RDR2VulkanFG.asi.v44.bak`.
 3. Copy the package's `RDR2VulkanFG.asi` into the game folder; the
    `RDR2VulkanFGDiagnostics.dll` goes into the game folder's `RDR2VulkanFG\` subfolder.
 4. Open `RDR2VulkanFG.ini` (next to the `.asi`) and make sure the TEST 1 block
    below is in place (it is basically the old baseline minus the v5 knobs).
 
 Log path, always: `<game folder>\RDR2VulkanFG.log`. Every session starts with
-`... RDR2 Vulkan FG 0.82+hudfield-v4.4 ...` — if that line is missing, the new
+`... RDR2 Vulkan FG 0.82+hudfield-v4.5 ...` — if that line is missing, the new
 `.asi` is not the one running.
 
 ## How to run each test (repeat for every test)
@@ -124,42 +124,58 @@ Same as TEST 5 plus `XeSSSynthSmooth=0`. If THIS flickers and TEST 5 did not,
 smoothing is proven as the working mechanism. Skip if TEST 5 was a clear win or
 clear fail. Send: `coleta-MODE3NOSMOOTH.zip`.
 
-## TEST 5c — DECISIVE TINT TEST (run this one; v4.4's key experiment)
+## TEST 5c — ANSWERED 09/11 (12:10 session): everything went magenta
 
-Same INI as TEST 5 plus:
-```ini
-XeSSSynthDebugTint=1
-```
-This paints OUR synthetic UI layer solid magenta (log line ends `... tint=1`).
-ROUTE: play until FG is on (`eligible=1`), open the weapon wheel ~15 s.
+Our synthetic texture IS composited by the SDK in mode 3. The magenta covering
+EVERYTHING (not just the UI) says our diff layer contains far more than UI —
+the working hypothesis is the two snapshots (backbuffer vs HUD-less) being out
+of step while the world moves. TEST 5c no longer needs running; 5d does.
 
-One question, no nuance: **on the frames where FG is on, is the wheel magenta
-or its normal colors?**
-- **Magenta** → the SDK IS compositing our texture. The flicker can only come
-  from the alpha estimate (its noise survives the tint) → fix = better
-  estimator; smoothing already helps and the tint stays off in normal use.
-- **Normal colors** → our tagged texture is being IGNORED upstream: the wheel
-  you see flickering is the interpolated HUD-less frame, not our layer. No
-  estimator work matters; next step is the wiring/SDK side (tag call, mode-3
-  preconditions).
-- Wheel appears/disappears or shows magenta GHOSTS → still "magenta" answer
-  (consumed), note the artifact separately.
+## TEST 5d — MAGENTA: STILL VS PAN (decides misalignment vs bad estimate)
 
-Send: `coleta-TINT.zip`
+Same INI as TEST 5 (`XeSSSynthUI=1 XeSSUiMode=3`) PLUS `XeSSSynthDebugTint=1`.
+ROUTE: FG on → weapon wheel open →
+1. **hold the camera completely still 15 s** — describe: does the magenta
+   recede to just the UI elements (wheel/HUD), or does the world stay magenta?
+2. then **pan/rotate slowly 15 s** — does the world light up magenta again?
+
+Verdict:
+- Magenta UI-only when still, world magenta when moving → the two input
+  snapshots are time-misaligned; the layer itself can be made clean (fix =
+  alignment/pairing, not the alpha math).
+- Magenta everywhere even when still → the estimate (or snapshot content) is
+  fundamentally wrong in motion-less frames too; deeper rework.
+
+Send: `coleta-TINTSTILL.zip`
+
+## TEST 6 — x3 DIAGNOSTICS RUN (expect x2 displayed; the LINES are the point)
+
+INI `DLSSGFrames=2` + normal gameplay 2–3 min. Search the log for, in order:
+- `XeSS interpolation target set: x3` (ours — should be there) and telemetry
+  `interp=2` (ours) vs `displayed=2` (the SDK's) — confirms the clamp is SDK-side;
+- `XeSS output pacing: reject detail magicOk=... flagsIntel=? flagsHardware=? flagsSoftware=?` —
+  the exact values the software pacer rejected on; this drives the next change;
+- `XeSS output pacing: SDK batch observed unbound; outputs=?` — if this line
+  appears at all, the stock SDK IS scheduling multi-output batches and the
+  clamp is elsewhere. Whether it appears or not is the answer.
+
+Send: `coleta-X3DIAG.zip`
 
 ---
 
 ## What each answer unlocks
 
-- TEST 5c MAGENTA wheel → texture is consumed: the estimate is the limiter; next
-  commit improves the alpha estimator (multi-channel least squares / edge-aware)
-  and EMA tuning becomes worth it. Stay on mode 1 default until then.
-- TEST 5c NORMAL-color wheel → the tagged layer is ignored upstream: estimator
-  work is pointless; we go after the tag/mode-3 wiring in the SDK path instead.
-- TEST 2 menu still self-closes (`open`+`close` pair) despite the fix, or the
-  v4.4 multiplier lines are missing → send log; the lines localize it precisely.
-- TEST 3 shows `createdInterp=3` but `displayed=2` still → SDK ignores
-  SetInterpolations; that is an SDK-side answer we currently lack.
+- TEST 5d UI-only magenta when still → snapshot alignment fix next; mode 3
+  becomes genuinely promising after it.
+- TEST 5d magenta everywhere even still → the synthetic layer concept needs
+  rework (or `XeSSSynthUI` stays off); mode 1 remains the recommendation.
+- TEST 6 reject-detail `flagsSoftware=0` (or another mismatch) → we know the
+  presenter mode the field SDK actually uses; the pacer gets a verified
+  contract for it (or a documented "cannot bind on this SDK" statement).
+- TEST 6 shows `outputs>=3` unbound → the SDK does schedule more frames;
+  suspicion moves downstream (our present loop / pacing waits).
+- TEST 2 menu still self-closes (`open`+`close` pair) despite the fix → send
+  log; the `dedup=` lines localize it precisely.
 - Frequent `HUD-less miss start ... lastReject=5/6` during normal play → matcher
   strictness is the remaining limiter (known; next patch target). `lastReject=2`
   only at the moment the wheel opens is the expected extent-change behavior.

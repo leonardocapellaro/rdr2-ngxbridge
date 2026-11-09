@@ -1,6 +1,6 @@
-# RDR2 Vulkan FG — build `0.82+hudfield-v4.4` (B390 + OptiScaler)
+# RDR2 Vulkan FG — build `0.82+hudfield-v4.5` (B390 + OptiScaler)
 
-> Look for the tag **`hudfield-v4.4`** on the first lines of `RDR2VulkanFG.log`.
+> Look for the tag **`hudfield-v4.5`** on the first lines of `RDR2VulkanFG.log`.
 > If it does not appear, the old `.asi` is still the one in use.
 
 **What this build is:** the 0.82 base of the original project (public source,
@@ -14,7 +14,44 @@ OptiScaler (~36 real fps → ~72 displayed at 3440x1440). The 2026-11-08 session
 also proved the fork's synthetic-UI pipeline runs end-to-end on the card
 (`armed → first frame` in the log, zero errors).
 
-## What changed in v4.4 (multiplier un-ceilinged + menu double-toggle fix + tint experiment)
+## What changed in v4.5 (diagnostics for the two open mysteries — not fixes yet)
+
+Your 09/11 noon session ran v4.4 (x3 INI + tint + menu) and solved one question
+and narrowed the other:
+
+**SOLVED — the synthetic UI texture IS used.** With `XeSSSynthDebugTint=1` the
+game went **magenta** in mode 3. The SDK composites our layer, so the mode-3
+flicker can only come from what we paint into it. "Everything" magenta (not
+just the wheel) is the extra clue: our `B − (1−a)·C` diff fires over the whole
+screen, i.e. the HUD-less and backbuffer inputs differ almost everywhere
+(most likely a timing/misalignment between the two snapshots during motion,
+not just real UI). Next battle: make that layer contain only UI — TESTE 5d in
+the checklist distinguishes misalignment from estimation (hold the camera
+still with the wheel open: if magenta shrinks to the UI, the two snapshots are
+out of step while the world moves; if it stays everywhere, the estimate itself
+is wrong). Nothing about this is "fixed" in v4.5 — tint stays available and
+off by default; mode 1 remains the recommended default.
+
+**OPEN — why 3x never displays.** Our side is now provably correct:
+`createdInterp=3` (creation ceiling fixed), the menu works live
+(`interpolation target set: x4` at 12:07:59 from your in-game switch), and
+`SetInterpolatedFrames` returns success — yet the SDK reports `displayed=2`
+everywhere. The prime suspect: our software output-pacer — the component built
+exactly for 2x/3x/4x on Intel cards without pacing queues — has logged
+`context ownership/mode rejected` in **every session since 11/07**, including
+the x2 ones. x2 works without it (the stock SDK path suffices); 3x+ apparently
+doesn't. v4.5 adds the forensics to end the guessing:
+- `reject detail ...` — the exact witness values the bind failed on (which
+  pointer stage, and the presenter's mode flags `intel/hardware/software`);
+- `SDK batch observed unbound; outputs=N` — if the stock SDK ever schedules
+  more than 2 outputs per batch, this fires (tells us whether the clamp is in
+  the SDK scheduler or downstream of the pacer);
+- telemetry now carries `interp=N` (what we asked) next to `displayed=N` (what
+  happened) — the old `requested=` was a boolean and misleading, sorry;
+- `SetInterpolations` is now edge-only (Intel's docs warn repeated calls may
+  recompile shaders; we were calling it every frame since v4.2).
+
+## What changed in v4.4 (multiplier un-ceilinged + menu double-toggle fix + tint experiment — all field-confirmed working in v4.5's session except the SDK-side x3 clamp)
 
 Your 08/11 night sessions (three configs, logs all self-reporting) found two
 hard bugs and one valid negative:
@@ -129,7 +166,7 @@ flips.
 
 ## Installation (one file swap)
 
-1. Game closed. Rename the current `.asi` (v4.1–v4.3) to `RDR2VulkanFG.asi.v43.bak` — rollback.
+1. Game closed. Rename the current `.asi` (v4.4) to `RDR2VulkanFG.asi.v44.bak` — rollback.
 2. Copy this `RDR2VulkanFG.asi` into the game folder. The optional collector goes
    to `RDR2VulkanFG\RDR2VulkanFGDiagnostics.dll` (subfolder, as before).
 3. In `RDR2VulkanFG.ini`, keep:
@@ -156,13 +193,13 @@ grabs ALL rotated logs, and only the last session lands in a zip if you skip it.
 | `XeSSSynthUI=1` + `XeSSUiMode=3` | **the primary v4.3 experiment**: no backbuffer extraction at all; wheel comes only from the smoothed synthetic layer. Check `XeSS synthetic UI armed`, `uiMode=3`, `Synthetic UI layer first frame ... smoothing=1` lines — and judge only during long `eligible=1` stretches |
 | `XeSSSynthUI=1` + `XeSSUiMode=3` + `XeSSSynthSmooth=0` | ablation row: same as above without temporal smoothing. If THIS flickers and the row above does not, smoothing is what fixes it — keep it |
 | `XeSSSynthUI=1` + `XeSSUiMode=5` | kept for reference: on 08/11 night it flickered **with FG proven on** (extraction refinement on top); expect no better than mode 3 |
-| `DLSSGFrames=2` (+ anything above) | **v4.4 multiplier check**: log must show `createdInterp=3`, `XeSS interpolation target set: x3`, and telemetry `displayed=3` — on v4.3 this silently stuck at x2 |
-| `XeSSSynthUI=1` + `XeSSUiMode=3` + `XeSSSynthDebugTint=1` | **the decisive v4.4 experiment**: wheel magenta on FG-on frames = our texture IS composited (estimator is the limiter); normal colors = our tag is ignored upstream (wiring is). One session, one answer |
+| `DLSSGFrames=2` (+ anything above) | **TESTE 6, v4.5 diagnostics run**: `interp=2` vs `displayed=2` separates our side from the SDK's; the new `reject detail` and `SDK batch observed unbound` lines tell us why x3 clamps. Expect it to still display x2 — that is data, not failure |
+| `XeSSSynthUI=1` + `XeSSUiMode=3` + `XeSSSynthDebugTint=1` | **TESTE 5d** (5c already answered: it went magenta = consumed): with the wheel open, hold the camera DEAD still for 15 s, then pan 15 s. Does the magenta shrink to UI elements when still, or stay everywhere? That picks the next fix (snapshot alignment vs alpha estimate) |
 | `XeSSUiComposition=0` | only meaningful with modes 2–5 (mode 1 already has composition off); expected WORSE — HUD vanishes from generated frames; revert immediately |
 
 Rules: one variable per session; verify the creation line
 `... uiMode=%u uiComposition=%d` in the log matches what you set; the
-`hudfield-v4.4` tag must appear.
+`hudfield-v4.5` tag must appear.
 
 ## Honest notes
 
@@ -186,5 +223,5 @@ Rules: one variable per session; verify the creation line
 
 ## Rollback
 
-Game closed → delete this `.asi` → rename `RDR2VulkanFG.asi.v43.bak` back. The
+Game closed → delete this `.asi` → rename `RDR2VulkanFG.asi.v44.bak` back. The
 `zz_ngxbridge` shim is untouched.
