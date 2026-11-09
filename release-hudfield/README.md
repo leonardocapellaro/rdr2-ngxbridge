@@ -1,6 +1,6 @@
-# RDR2 Vulkan FG — build `0.82+hudfield-v4.2` (B390 + OptiScaler)
+# RDR2 Vulkan FG — build `0.82+hudfield-v4.3` (B390 + OptiScaler)
 
-> Look for the tag **`hudfield-v4.2`** on the first lines of `RDR2VulkanFG.log`.
+> Look for the tag **`hudfield-v4.3`** on the first lines of `RDR2VulkanFG.log`.
 > If it does not appear, the old `.asi` is still the one in use.
 
 **What this build is:** the 0.82 base of the original project (public source,
@@ -14,7 +14,30 @@ OptiScaler (~36 real fps → ~72 displayed at 3440x1440). The 2026-11-08 session
 also proved the fork's synthetic-UI pipeline runs end-to-end on the card
 (`armed → first frame` in the log, zero errors).
 
-## What changed in v4.2 (the "why does FG keep dropping" fix)
+## What changed in v4.3 (synthetic UI temporal smoothing + mode 3)
+
+Your 2026-11-08 night report: **mode 5 (`XeSSSynthUI=1` + `XeSSUiMode=5`) still
+flickered the weapon wheel — and this time with FG demonstrably on** (the log
+shows FG enabled from +87 s to the end of the session, wheel opened inside that
+window). That verdict is real, and it is informative: the synthetic layer
+computes `B − (1−a)·C` from the exact same pair the SDK's mode-4 extraction uses
+— so its alpha estimate carries the same noise Intel documents for translucent
+UI, and mode 5 even re-applies the backbuffer extraction on top ("refine by
+extracting"). Two changes:
+
+1. **Temporal smoothing (EMA) of the synthetic layer — `XeSSSynthSmooth`**
+   (0–100, default 35 = new-frame weight). A stationary UI (wheel, minimap)
+   converges in ~2–3 frames while the per-frame alpha-estimation noise averages
+   out; vanished UI fades to hard zero (no ghost tail). The accumulator restarts
+   on provider history resets. `0` restores the raw v4.2 behaviour.
+2. **Mode 3 is now the primary UI experiment** (`HUDLESS_UITEXTURE`: "interpolate
+   HUD-less color, blend UI from UI texture"). Unlike 4/5 it does **no backbuffer
+   extraction at all** — the wheel can only come from our (now smoothed) UI
+   texture. If the flicker is extraction noise, mode 3 removes its source; if it
+   survives mode 3, the synthetic estimate itself is the limiter and we know it
+   from one session.
+
+## What changed in v4.2 (the "why does FG keep dropping" fix — still in this build)
 
 Analysis of the 2026-11-08 field logs (`FIELD-B390-5.md` in the project repo)
 showed frame generation was actually **on only ~16% of the session** (and only
@@ -71,7 +94,7 @@ flips.
 
 ## Installation (one file swap)
 
-1. Game closed. Rename the current `.asi` (v4.1) to `RDR2VulkanFG.asi.v41.bak` — rollback.
+1. Game closed. Rename the current `.asi` (v4.1/v4.2) to `RDR2VulkanFG.asi.v42.bak` — rollback.
 2. Copy this `RDR2VulkanFG.asi` into the game folder. The optional collector goes
    to `RDR2VulkanFG\RDR2VulkanFGDiagnostics.dll` (subfolder, as before).
 3. In `RDR2VulkanFG.ini`, keep:
@@ -95,12 +118,14 @@ grabs ALL rotated logs, and only the last session lands in a zip if you skip it.
 |---|---|
 | *(default — nothing extra)* mode 1 | no wheel flicker (mode 1 baseline); FG flips should be far fewer than before — count `eligible=1` vs `eligible=0` windows in the log |
 | `XeSSUiMode=4` | author default; wheel flicker expected (known Intel extraction weakness) — control row |
-| `XeSSSynthUI=1` + `XeSSUiMode=5` | the experiment: synthetic premultiplied UI + extraction refinement. Only judged fairly once the log shows long `eligible=1` stretches — check `XeSS synthetic UI armed`, `uiMode=5`, `Synthetic UI layer first frame` lines |
+| `XeSSSynthUI=1` + `XeSSUiMode=3` | **the primary v4.3 experiment**: no backbuffer extraction at all; wheel comes only from the smoothed synthetic layer. Check `XeSS synthetic UI armed`, `uiMode=3`, `Synthetic UI layer first frame ... smoothing=1` lines — and judge only during long `eligible=1` stretches |
+| `XeSSSynthUI=1` + `XeSSUiMode=3` + `XeSSSynthSmooth=0` | ablation row: same as above without temporal smoothing. If THIS flickers and the row above does not, smoothing is what fixes it — keep it |
+| `XeSSSynthUI=1` + `XeSSUiMode=5` | kept for reference: on 08/11 night it flickered **with FG proven on** (extraction refinement on top); expect no better than mode 3 |
 | `XeSSUiComposition=0` | only meaningful with modes 2–5 (mode 1 already has composition off); expected WORSE — HUD vanishes from generated frames; revert immediately |
 
 Rules: one variable per session; verify the creation line
 `... uiMode=%u uiComposition=%d` in the log matches what you set; the
-`hudfield-v4.2` tag must appear.
+`hudfield-v4.3` tag must appear.
 
 ## Honest notes
 
@@ -115,10 +140,14 @@ Rules: one variable per session; verify the creation line
   `HUD-less miss start ... lastReject=N` lines show `5` (loadOp) or `6`
   (UNDEFINED layout) during normal gameplay, the remaining stalls are matcher
   strictness by design — report the code, and the next step is known.
-- Synthetic UI alpha is an estimate (`max channel delta ×2`, clamped); edge
-  quality needs eyes. With `XeSSSynthUI=0` (default) nothing of it is allocated.
+- Synthetic UI alpha is an estimate (`max channel delta ×2`, clamped) — on
+  08/11 night mode 5 + raw layer flickered with FG on, so the estimate is real
+  work in progress; v4.3's temporal EMA (`XeSSSynthSmooth=35` default) is the
+  first countermeasure and mode 3 (no extraction) is its fair stage. Edge
+  quality still needs eyes. With `XeSSSynthUI=0` (default) nothing of it is
+  allocated.
 
 ## Rollback
 
-Game closed → delete this `.asi` → rename `RDR2VulkanFG.asi.v41.bak` back. The
+Game closed → delete this `.asi` → rename `RDR2VulkanFG.asi.v42.bak` back. The
 `zz_ngxbridge` shim is untouched.

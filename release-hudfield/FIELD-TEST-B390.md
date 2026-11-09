@@ -1,4 +1,4 @@
-# B390 field test — package v4.2 (log tag: `hudfield-v4.2`)
+# B390 field test — package v4.3 (log tag: `hudfield-v4.3`)
 
 Run ONE config per game session. After EVERY session: close the game, then
 double-click `collect-once.bat` (it grabs ALL logs now — if you only run it at
@@ -9,14 +9,14 @@ the end, only the last session ever lands in a zip).
 1. On the B390 PC, download the zip from the release:
    https://github.com/leonardocapellaro/RDR2-Vulkan-FG/releases/latest
    Extract anywhere (e.g. `Downloads\hudfield`).
-2. In the game folder: rename `RDR2VulkanFG.asi` → `RDR2VulkanFG.asi.v41.bak`.
+2. In the game folder: rename `RDR2VulkanFG.asi` → `RDR2VulkanFG.asi.v42.bak`.
 3. Copy the package's `RDR2VulkanFG.asi` into the game folder; the
    `RDR2VulkanFGDiagnostics.dll` goes into the game folder's `RDR2VulkanFG\` subfolder.
 4. Open `RDR2VulkanFG.ini` (next to the `.asi`) and make sure the TEST 1 block
    below is in place (it is basically the old baseline minus the v5 knobs).
 
 Log path, always: `<game folder>\RDR2VulkanFG.log`. Every session starts with
-`... RDR2 Vulkan FG 0.82+hudfield-v4.2 ...` — if that line is missing, the new
+`... RDR2 Vulkan FG 0.82+hudfield-v4.3 ...` — if that line is missing, the new
 `.asi` is not the one running.
 
 ## How to run each test (repeat for every test)
@@ -82,33 +82,48 @@ the comparison. Note the `uiMode=4` creation line.
 
 Send: `coleta-MODE4.zip`
 
-## TEST 5 — SYNTHETIC UI + MODE 5 (the experiment, fair version)
+## TEST 5 — SYNTHETIC UI + MODE 3 (the v4.3 experiment)
+
+v4.2 night proved mode 5 still flickered with FG on — mode 4/5 extract the UI
+from the backbuffer, the known weak spot. **Mode 3 uses no extraction at all**:
+the UI can only come from our synthetic layer, now temporally smoothed.
 
 INI add:
 ```ini
 XeSSSynthUI=1
-XeSSUiMode=5
+XeSSUiMode=3
 ```
+(`XeSSSynthSmooth=35` is the default; leave it alone unless doing TEST 5b.)
+
 ROUTE: play 2–3 min → weapon wheel ~15 s → observe.
-This time the log decides before your eyes do — check first:
-- `XeSS synthetic UI armed` + `uiMode=5` in the creation lines,
-- `Synthetic UI layer first frame: 3440x1440` (pipeline ran),
+The log decides before your eyes do — check first:
+- `XeSS synthetic UI armed` + `uiMode=3` in the creation lines,
+- `Synthetic UI layer first frame: 3440x1440 ... smoothing=1` (pipeline ran,
+  EMA on),
 - **before opening the wheel**, search `eligible=1` — only judge the wheel while
-  FG is on (long ON stretches; if the log shows you were mostly `eligible=0`,
-  the verdict does not count — that is exactly what burned TEST 5 last time).
+  FG is on (long ON stretches; if you were mostly `eligible=0`, the verdict does
+  not count — that is what burned TEST 5 on 08/11 night... and note FG then took
+  ~85 s to first activate: the wheel test belongs to the `enabled=1` window).
 
-Verdicts to report: wheel flicker (none/same/as mode 4), and any UI ghosting on
-generated frames.
+Verdicts to report: wheel flicker (none/light-halo/same-as-mode-4), and any UI
+ghosting or smear when the wheel appears/vanishes (EMA ramp is ~2–3 frames).
 
-Send: `coleta-MODE5.zip`
+Send: `coleta-MODE3.zip`
+
+## TEST 5b — OPTIONAL ABLATION (only if TEST 5 looked good)
+
+Same as TEST 5 plus `XeSSSynthSmooth=0`. If THIS flickers and TEST 5 did not,
+smoothing is proven as the working mechanism. Skip if TEST 5 was a clear win or
+clear fail. Send: `coleta-MODE3NOSMOOTH.zip`.
 
 ---
 
 ## What each answer unlocks
 
-- TEST 1 good + TEST 5 good → mode 5 becomes the recommendation; ship default.
-- TEST 1 good + TEST 5 flickers with PROVEN FG uptime → synthetic layer alpha
-  needs work (known next steps); stay on mode 1 default.
+- TEST 1 good + TEST 5 good → mode 3 + smoothing becomes the recommendation;
+  ship default.
+- TEST 1 good + TEST 5 flickers with PROVEN FG uptime → the synthetic estimate
+  itself is the limiter (next step: better alpha); stay on mode 1 default.
 - TEST 2 proof line without `menu: open` → send log; the line localizes the fix.
 - Frequent `HUD-less miss start ... lastReject=5/6` → matcher strictness is the
   remaining limiter (known; next patch target).
