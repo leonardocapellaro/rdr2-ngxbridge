@@ -1,45 +1,45 @@
-# FIELD-B390-2 — FG **funcionou** na máquina real (2026-11-07 23:42–23:45)
+# FIELD-B390-2 — FG **worked** on the real machine (2026-11-07 23:42–23:45)
 
-Build: `release-mor3a-hudless` (0.82+patch). Coleta: `coleta-20261107-2346.zip`
-(extraída em `field/coleta-2346/`). Sessão de 3,5 min; sessão limpa (exit 0).
+Build: `release-mor3a-hudless` (0.82+patch). Collection: `coleta-20261107-2346.zip`
+(extracted into `field/coleta-2346/`). 3.5-minute session; clean session (exit 0).
 
-## FG rodando — evidência
+## FG running — evidence
 - `XeSS MFG experimental unlock: validated maximum=3 generated frames (4x)`
-- `HUD capture first success: frame=61 renderPass=...` (7,2s)
-- do frame ~5900 ao fim: `enabled=1 displayed=2` contínuo; `hud==epoch` (snapshot
-  bate todo frame); 3120 epochs em 87 s → **~35,8 reais → ~71,6 exibidos**.
-- Único susto: FG-104 aos 88,7s (`Bridge input size changed: 2293x960;
-  resetting provider history`) — transitório, "recovered" 25ms depois.
+- `HUD capture first success: frame=61 renderPass=...` (7.2s)
+- from frame ~5900 to the end: `enabled=1 displayed=2` continuous; `hud==epoch` (snapshot
+  matches every frame); 3120 epochs in 87 s → **~35.8 real → ~71.6 displayed**.
+- Only scare: FG-104 at 88.7s (`Bridge input size changed: 2293x960;
+  resetting provider history`) — transient, "recovered" 25ms later.
 
-## SURPRESA honesta: meu patch NÃO foi o que destravou
-`via present transfer`: **0 ocorrências**. O capture casou pela assinatura de
-render pass NORMAL, no 0.82, com o OptiScaler no lugar. O beta 1.0 falhava essa
-assinatura sob as MESMAS condições (hud=0 para sempre). Logo: a virada foi
-**trocar o .asi beta → 0.82**; a gate HUD-less do beta regride sob SR Vulkan de
-terceiros (razão exata desconhecida — fonte fechada). Chave
-`CapturePresentTransfers=1` ficou armada sem necessidade (inofensiva; caminho
-nunca percorrido). Possível efeito colateral: nossos wrappers de
-CopyImage/BlitImage instalados no dispatch — nunca observados alterando nada.
+## Honest surprise: my patch was NOT what unlocked it
+`via present transfer`: **0 occurrences**. The capture matched via the NORMAL
+render-pass signature, on the 0.82, with OptiScaler in place. The 1.0 beta failed
+this signature under the SAME conditions (hud=0 forever). Therefore: the turning
+point was **swapping the beta .asi → 0.82**; the beta's HUD-less gate regresses
+under third-party SR Vulkan (exact reason unknown — closed source). The
+`CapturePresentTransfers=1` key stayed armed with no need (harmless; path
+never taken). Possible side effect: our CopyImage/BlitImage wrappers installed
+in the dispatch — never observed changing anything.
 
-## 3 defeitos restantes (relatório usuário)
-1. **Trocar 2x→3x/4x**: zero eventos de hotkey/menu no log. Menu 0.82 NÃO tem
-   seletor de multiplicador p/ XeSS (só "Max multiplier: 4x" texto,
-   menu.cpp:475); restam ini `DLSSGFrames` (jogo fechado; clamp 32) e tecla End
-   (0x23) → `hotkey: generated frames -> ...` — nenhum aparece, então a tecla
-   nunca chegou (usuário provavelmente procurou no menu). Perguntar como tentou.
-2. **HUD/menu piscando**: causa de projeto — FG recebe snapshot `hudless`
-   (xess_provider.cpp:706) e SDK não re-compõe HUD; o recompositor existe
-   (`HudMaskApply(real,hudless,generated)`, hud_mask.cpp:119-153, shaders e
-   barriers prontos) mas **não tem chamador no 0.82 público** (grep completo;
-   só hud_mask.h declara). Beta carrega as MESMAS strings — provável que o beta
-   tenha o wiring (inverificável, fechado). Sem chave de ini que ligue. Tentativa
-   de wiring = próximo passo com risco (layouts de `generated` no handoff;
-   erro → hang de GPU na sessão rara do usuário).
-3. **Perf 47/45→31-35**: esperado — FG a 3440x1440 quase dobra o trabalho de
-   GPU (inferência XeSS-FG + c6pia de capture); base 47→~36 e exibido ~72.
-   proxyPresent 10-16ms médios no present thread (bound em XeLLSleep, não CPU).
+## 3 remaining defects (user report)
+1. **Switching 2x→3x/4x**: zero hotkey/menu events in the log. The 0.82 menu has
+   NO multiplier selector for XeSS (only "Max multiplier: 4x" text,
+   menu.cpp:475); what remains is the ini `DLSSGFrames` (game closed; clamp 32) and the End
+   key (0x23) → `hotkey: generated frames -> ...` — none of these appear, so the key
+   never arrived (the user probably looked in the menu). Ask how they tried.
+2. **HUD/menu flickering**: a design cause — FG receives a `hudless` snapshot
+   (xess_provider.cpp:706) and the SDK does not recompose the HUD; the recompositor exists
+   (`HudMaskApply(real,hudless,generated)`, hud_mask.cpp:119-153, shaders and
+   barriers ready) but **has no caller in public 0.82** (full grep;
+   only hud_mask.h declares it). The beta carries the SAME strings — the beta probably
+   has the wiring (unverifiable, closed). No ini key turns it on. An attempt
+   at wiring = the next step, with risk (`generated` layouts at the handoff;
+   an error → GPU hang in the user's rare session).
+3. **Perf 47/45→31-35**: expected — FG at 3440x1440 nearly doubles the GPU
+   workload (XeSS-FG inference + capture copies); base 47→~36 and displayed ~72.
+   proxyPresent 10-16ms average on the present thread (bound by XeLLSleep, not CPU).
 
-## Status por camada
-ponte (zz_ngxbridge) ✔ · inputs NGX ✔ · assinatura HUD-less ✔(só no 0.82) ·
-pacing/swapchain virtual ✔ · geração+present 2x ✔ · multiplicador >2x: só ini
-(melhorável) · HUD nos frames gerados: falta wiring · FSRFG: morto (driver).
+## Status by layer
+bridge (zz_ngxbridge) ✔ · NGX inputs ✔ · HUD-less signature ✔ (only on the 0.82) ·
+pacing/virtual swapchain ✔ · 2x generation+present ✔ · multiplier >2x: ini only
+(improvable) · HUD on generated frames: wiring missing · FSRFG: dead (driver).

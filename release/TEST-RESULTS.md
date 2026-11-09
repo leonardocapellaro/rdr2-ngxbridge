@@ -1,18 +1,18 @@
-# TEST-RESULTS — evidência de teste (ambiente de desenvolvimento)
+# TEST-RESULTS — test evidence (development environment)
 
-Data: 2026-11-07. Ambiente: Fedora 44 (kernel 7.2.13), `x86_64-w64-mingw32-gcc
+Date: 2026-11-07. Environment: Fedora 44 (kernel 7.2.13), `x86_64-w64-mingw32-gcc
 (GCC) 16.2.1 (Fedora MinGW 16.2.1-1.fc44)`, `g++ (GCC) 16.2.1 (Red Hat)`,
-`wine-11.20 (Staging)`. **Sem RDR2 e sem GPU Intel aqui** — os testes abaixo
-provam a cadeia de compatibilidade com mocks fiéis ao comportamento real do
-OptiScaler e do RDR2VulkanFG (comportamentos verificados diretamente no
-código-fonte das duas bases), não o jogo.
+`wine-11.20 (Staging)`. **No RDR2 and no Intel GPU here** — the tests below
+prove the compatibility chain with mocks faithful to the real behavior of
+OptiScaler and RDR2VulkanFG (behaviors verified directly in the source
+code of both codebases), not the game.
 
-## T1 — build Windows x64 real
+## T1 — real Windows x64 build
 
 ```
 $ bash build.sh
 ...
-OK (0 failures)          <- T2 roda embutido agora
+OK (0 failures)          <- T2 now runs embedded
 BUILD OK
 -rwxr-xr-x. ...   292040 build/mock_game.exe
 -rwxr-xr-x. ...   341272 build/mock_mor3a.dll
@@ -20,7 +20,7 @@ BUILD OK
 -rwxr-xr-x. ...  3822004 build/zz_ngxbridge.asi
 ```
 
-Sanidade do artefato (imports; sem nada exótico, DLL normal):
+Artifact sanity (imports; nothing exotic, normal DLL):
 
 ```
 $ x86_64-w64-mingw32-objdump -p build/zz_ngxbridge.asi | grep 'DLL Name'
@@ -28,32 +28,32 @@ $ x86_64-w64-mingw32-objdump -p build/zz_ngxbridge.asi | grep 'DLL Name'
         DLL Name: msvcrt.dll
 ```
 
-## T2 — testes unitários da ABI compartilhada (nativo Linux)
+## T2 — unit tests of the shared ABI (native Linux)
 
 ```
 $ g++ -O2 -std=c++17 -Isrc tests/test_mirror.cpp src/mirror_core.cpp -o build/test_mirror -pthread
 $ ./build/test_mirror
-... (casos: Ptr<->ULL, I<->UI, ULL->I faixa, F->Ptr recusado, chave ausente,
-     Success+ponteiro-nulo tratado como ausência, Reset, getObject idempotente)
+... (cases: Ptr<->ULL, I<->UI, ULL->I range, F->Ptr refused, missing key,
+     Success+null-pointer treated as absence, Reset, idempotent getObject)
 OK (0 failures)
 ```
 
-## T3 — self-test end-to-end sob Wine (o teste mandatório do briefing §7)
+## T3 — end-to-end self-test under Wine (the briefing §7 mandatory test)
 
 ```
 $ bash selftest/run_wine.sh
 ```
 
-Cobre (§7): create/eval NGX, handle "original" vs. falso do OptiScaler,
-caminho de módulo, ordem de carga dos ASI, depth/MV válidos, resolução por
-nome, espelho de vtable, leitura cruzada de tipo, ausência de input (chave
-inexistente → Fail original), reentrância (thread do bridge vs. loader), e
-principalmente o exigido: **"mock NGX demonstrando que o observador recebe os
-recursos necessários mesmo quando o OptiScaler fornece a implementação de
-upscaling"** — `OBSERVER-OK` com ponteiros reais vindos do mock do OptiScaler
-sem nenhum NVSDK de verdade no processo.
+Covers (§7): create/eval NGX, OptiScaler's "original" vs. fake handle,
+module path, ASI load order, valid depth/MV, resolution by name,
+vtable mirroring, cross-type read, missing input (nonexistent
+key → original Fail), reentrancy (bridge thread vs. loader), and above all the required one:
+**"mock NGX demonstrating that the observer receives the necessary
+resources even when OptiScaler provides the upscaling
+implementation"** — `OBSERVER-OK` with real pointers coming from the OptiScaler mock
+with no actual NVSDK in the process.
 
-Transcrição completa (reprodutível; só endereços/timestamps mudam):
+Full transcription (reproducible; only addresses/timestamps change):
 
 ```
 ----- mock_game stdout -----
@@ -69,7 +69,7 @@ Transcrição completa (reprodutível; só endereços/timestamps mudam):
 [GAME   ] resolved alloc=... create=... eval=...
 [OPTI-MOCK] AllocateParameters -> param=00000000007c5370
 [OPTI-MOCK] dump(obj=00000000007c5370) vptr=... (off=+0x32140)
-    slot[ 0..15]=stubs externos   <- vtable espelhada
+    slot[ 0..15]=stubs externos   <- mirrored vtable
 [MOR3A-MOCK] CreateFeature: SR flags result=1 value=1 MIRROR-CROSS-TYPE-OK
 [GAME   ] CreateFeature result=1
 [MOR3A-MOCK] OBSERVER depth(result=1 ptr=0000000140009100) motionvectors(result=1 ptr=0000000140009000) OBSERVER-OK
@@ -83,12 +83,12 @@ target found: Z:\...\build\selftest\mock_optiscaler.dll at ...
 hook GetModuleFileNameW: kernel32=...:1 kernelbase=...:1
 hook GetModuleFileNameA: kernel32=...:1 kernelbase=...:1
 hook observer: ntdll!LdrGetProcedureAddress=... -> 0
-mirror: 2/6 parameter-factory export hooks created   (mock só tem os Vulkan; real tem os 6 - verificado no código)
+mirror: 2/6 parameter-factory export hooks created   (mock only has the Vulkan ones; the real one has all 6 - verified in the code)
 armed: spoof=1 (kernel32 ok), observer=1, factory hooks=2/6
 intercepted NVSDK_NGX_VULKAN_AllocateParameters (result=1 obj=00000000007c5370) by mock_game.exe
 mirror: vtable ... patched (16 typed slots + Reset) - cross-type reads now answered, stale-after-reset guarded
 mirror: coerced typed answer for 'DLSS.Feature.Create.Flags'
-mirror: no fallback for 'DLSS.Feature.Create.Flags'    <- pós-Reset: recusa correta de valor antigo
+mirror: no fallback for 'DLSS.Feature.Create.Flags'    <- post-Reset: correct refusal of the stale value
 resolved 'NVSDK_NGX_VULKAN_AllocateParameters' from the OptiScaler handle by mock_mor3a.dll -> ...
 resolved 'NVSDK_NGX_VULKAN_CreateFeature' from the OptiScaler handle by mock_mor3a.dll -> ...
 spoofed provider path for capture module: Z:\...\build\selftest\nvngx.dll
@@ -98,38 +98,38 @@ spoofed provider path for capture module: Z:\...\build\selftest\nvngx.dll
 SELFTEST: PASS
 ```
 
-O que cada linha prova:
+What each line proves:
 
-| Linha | Prova |
+| Line | Proof |
 |---|---|
-| `RESULT: ACCEPT` ×2 | com o spoof, o gate do Mor3a aceita (sem o bridge ele REJEITA — modo de regressão abaixo) |
-| `spoofed provider path` | o spoof dispara só para o chamador-alvo, exatamente 2× (Create+Evaluate) |
-| `OBSERVER-OK` ×2 frames | o observador do wrapper vê Depth+MotionVectors **não nulos** do OptiScaler-mock em todos os frames |
-| `MIRROR-CROSS-TYPE-OK` + `coerced typed answer` | a leitura cruzada de tipo (int gravado lido por slot "unsigned") só existe por causa do espelho — o provedor puro falharia ali (verificado com Mirror=0: `MIRROR-MISSING(flags)` + `input` inválido) |
-| `2/6 ... created` | degradação graciosa quando um export não existe (mock tem só os 2 Vulkan; real tem os 6, verificado no código do 0.9.4) |
-| `STALE-GUARD-OK` + `no fallback ...` | depois do `Reset()` do provedor (slot 16), o espelho **recusa** o valor pré-reset — a invariante "nada de frame antigo vale" tem teste próprio |
-| `by mock_game.exe` / `by mock_mor3a.dll` | atribuição correta de quem criou o objeto (o jogo) e de quem encaminhou a resolução (o hook global do Mor3a; na produção aparecerá `RDR2VulkanFG.asi` — é exatamente o sinal que a §6.1 do DIAGNOSIS procura) |
+| `RESULT: ACCEPT` ×2 | with the spoof, the Mor3a gate accepts (without the bridge it REJECTS — regression mode below) |
+| `spoofed provider path` | the spoof fires only for the target caller, exactly 2× (Create+Evaluate) |
+| `OBSERVER-OK` ×2 frames | the wrapper's observer sees **non-null** Depth+MotionVectors from the OptiScaler mock on every frame |
+| `MIRROR-CROSS-TYPE-OK` + `coerced typed answer` | the cross-type read (stored int read by the "unsigned" slot) only exists because of the mirror — the pure provider would fail there (verified with Mirror=0: `MIRROR-MISSING(flags)` + invalid `input`) |
+| `2/6 ... created` | graceful degradation when an export doesn't exist (the mock only has the 2 Vulkan ones; the real one has all 6, verified in the 0.9.4 code) |
+| `STALE-GUARD-OK` + `no fallback ...` | after the provider's `Reset()` (slot 16), the mirror **refuses** the pre-reset value — the "no stale frame is valid" invariant has its own test |
+| `by mock_game.exe` / `by mock_mor3a.dll` | correct attribution of who created the object (the game) and who forwarded the resolution (Mor3a's global hook; in production it will show `RDR2VulkanFG.asi` — it's exactly the signal DIAGNOSIS §6.1 looks for) |
 
-## T4 — self-test no Windows
+## T4 — self-test on Windows
 
-`release/selftest-windows/run_selftest.bat` roda a mesma cadeia em Windows
-x64 nativo (sem Wine) e imprime `SELFTEST: PASS/FAIL`. Rodar na B390 **antes**
-de instalar no jogo. Nenhuma dependência de runtime (tudo estático).
+`release/selftest-windows/run_selftest.bat` runs the same chain on native Windows
+x64 (no Wine) and prints `SELFTEST: PASS/FAIL`. Run it on the B390 **before**
+installing into the game. No runtime dependencies (everything static).
 
-## Regressões verificadas durante o desenvolvimento
+## Regressions verified during development
 
-- `Mirror=0` → `MIRROR-MISSING(flags)`: o espelho é realmente necessário,
-  não decorativo.
-- `Spoof=0` → `RESULT: REJECT` e nenhuma linha `OBSERVER`: reproduz o
-  FG-109 de produção (comportamento atual sem o bridge).
-- Terceiro engine inline em `GetProcAddress` (descartado por projeto): silencia
-  as camadas anteriores — motivo pelo qual o design final não hookiza GPA.
+- `Mirror=0` → `MIRROR-MISSING(flags)`: the mirror is genuinely necessary,
+  not decorative.
+- `Spoof=0` → `RESULT: REJECT` and no `OBSERVER` line: reproduces
+  production FG-109 (current behavior without the bridge).
+- Third inline engine in `GetProcAddress` (discarded by design): silences
+  the previous layers — which is why the final design doesn't hook GPA.
 
-## Limites honestos
+## Honest limits
 
-Wine ≠ Windows de produção para semânticas de loader muito específicas; por
-isso o T4 existe. E nenhum mock substitui o RDR2 real: a hipótese que só o
-log do observador na B390 fecha é o módulo chamador de `LdrGetProcedureAddress`
-/`GetProcAddress` no jogo (DIAGNOSIS §6). **Nada aqui afirma "funciona no
-RDR2"** — afirma que a causa raiz comprovada foi eliminada e mensurável na
-máquina real.
+Wine ≠ production Windows for very specific loader semantics; that's
+why T4 exists. And no mock replaces the real RDR2: the hypothesis that only
+the observer log on the B390 can settle is the caller module of
+`LdrGetProcedureAddress`/`GetProcAddress` in the game (DIAGNOSIS §6). **Nothing here claims "it works in
+RDR2"** — it claims the proven root cause was eliminated and measurable on the
+real machine.

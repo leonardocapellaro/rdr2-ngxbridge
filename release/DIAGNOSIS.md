@@ -1,191 +1,191 @@
-# Diagnóstico — por que o XeFG nunca ligou no RDR2 Vulkan (e o que esta ponte faz)
+# Diagnosis — why XeFG never turned on in RDR2 Vulkan (and what this bridge does)
 
-Máquina de destino: Win11, Intel Arc B390, RDR2 Epic 1.0.1491.50, 3440×1440,
-renderizador **Vulkan nativo**, OptiScaler 0.9.4 + OptiPatcher +
-rdr2-vulkan-frame-generation (Mor3a 1.0 beta, binário de produção
-`RDR2VulkanFG.asi`) + loader ASI dinput8 + fakenvapi.
+Target machine: Win11, Intel Arc B390, RDR2 Epic 1.0.1491.50, 3440×1440,
+**native Vulkan** renderer, OptiScaler 0.9.4 + OptiPatcher +
+rdr2-vulkan-frame-generation (Mor3a 1.0 beta, production binary
+`RDR2VulkanFG.asi`) + dinput8 ASI loader + fakenvapi.
 
-## 1. O que os logs da máquina mostravam
+## 1. What the machine's logs showed
 
-Dois arquivos em `case_files/` (watchdog e log do RDR2VulkanFG):
+Two files in `case_files/` (watchdog and RDR2VulkanFG log):
 
-- `wd: evals=0` — o contador de `EvaluateFeature` do OptiScaler nunca subiu
-  para o wrapper de inputs;
-- `Early NGX export routing commit=0` — **isto não é erro**: `commit=0` é o
-  `NO_ERROR` do `DetourTransactionCommit` (inputs.cpp:677). O hook do
-  `GetProcAddress` do RDR2VulkanFG foi instalado com sucesso. O que falta é
-  o que ele deveria ter visto passar;
-- telemetria `input=0 requested=0 enabled=0 displayed=1` — o RDR2VulkanFG
-  nunca recebeu input de SR; o FG ficou desabilitado → código **FG-109**;
-- OSD `Vulkan | FSR 2.2.1 | Input: DLSS` — explicado na seção 4.
+- `wd: evals=0` — OptiScaler's `EvaluateFeature` counter never incremented
+  for the inputs wrapper;
+- `Early NGX export routing commit=0` — **this is not an error**: `commit=0` is the
+  `NO_ERROR` of `DetourTransactionCommit` (inputs.cpp:677). The
+  `GetProcAddress` hook of RDR2VulkanFG was installed successfully. What's missing is
+  what it should have seen pass through;
+- telemetry `input=0 requested=0 enabled=0 displayed=1` — RDR2VulkanFG
+  never received SR input; FG stayed disabled → code **FG-109**;
+- OSD `Vulkan | FSR 2.2.1 | Input: DLSS` — explained in section 4.
 
-## 2. Causa raiz (comprovada por código + logs)
+## 2. Root cause (proven by code + logs)
 
-A cadeia NGX do jogo com OptiScaler ativo:
+The game's NGX chain with OptiScaler active:
 
-1. O RDR2 chama `LoadLibrary("nvngx.dll")`. O OptiScaler hookiza
-   `LdrLoadDll`/`NtLoadDll` e **responde com o próprio HMODULE** — um "carregamento
-   falso", nenhum `nvngx.dll` chega a ser mapeado
+1. RDR2 calls `LoadLibrary("nvngx.dll")`. OptiScaler hooks
+   `LdrLoadDll`/`NtLoadDll` and **answers with its own HMODULE** — a "fake load", no
+   `nvngx.dll` ever gets mapped
    (`OptiScaler/OptiScaler/hooks/LibraryLoad_Hooks.cpp:66-75`,
    `EnableDlssInputs`).
-2. O jogo resolve `NVSDK_NGX_VULKAN_*` com `GetProcAddress(eseloghandle, ...)`.
-   O OptiScaler hookiza `GetProcAddress` (kernel32: `Kernel_Hooks.cpp:111-146`;
-   kernelbase: `:257-275`) e serve suas próprias implementações. O
-   **upscaling funciona** — é por isso que o jogo roda com SR.
-3. O RDR2VulkanFG também hookiza `GetProcAddress` (via MS Detours,
-   `rdr2-vulkan-frame-generation/src/inputs.cpp:675`). No seu gate
-   `h_EarlyNgxGetProc` (inputs.cpp:638-669), quando alguém resolve
-   `NVSDK_NGX_VULKAN_{CreateFeature,CreateFeature1,EvaluateFeature}`, ele
-   pergunta **de que arquivo vem o módulo provedor** com
-   `GetModuleFileNameW(handle)` e só instala o wrapper de captura de inputs
-   se a resposta for exatamente `nvngx.dll` ou `_nvngx.dll` (a mesma
-   verificação é repetida em `NgxProbeTick`, inputs.cpp:696-732).
-4. Como o handle devolvido no passo 1 é o do **OptiScaler.asi**, a resposta é
-   `...\OptiScaler.asi` → **REJECT silencioso** → nenhum wrapper é instalado
-   → `evals=0` → nenhum `Depth`/`MotionVectors`/flags chega ao XeFG →
+2. The game resolves `NVSDK_NGX_VULKAN_*` with `GetProcAddress(eseloghandle, ...)`.
+   OptiScaler hooks `GetProcAddress` (kernel32: `Kernel_Hooks.cpp:111-146`;
+   kernelbase: `:257-275`) and serves its own implementations. The
+   **upscaling works** — that's why the game runs with SR.
+3. RDR2VulkanFG also hooks `GetProcAddress` (via MS Detours,
+   `rdr2-vulkan-frame-generation/src/inputs.cpp:675`). In its gate
+   `h_EarlyNgxGetProc` (inputs.cpp:638-669), when someone resolves
+   `NVSDK_NGX_VULKAN_{CreateFeature,CreateFeature1,EvaluateFeature}`, it
+   asks **which file the provider module comes from** with
+   `GetModuleFileNameW(handle)` and only installs the inputs-capture wrapper
+   if the answer is exactly `nvngx.dll` or `_nvngx.dll` (the same
+   check is repeated in `NgxProbeTick`, inputs.cpp:696-732).
+4. Since the handle returned in step 1 is the **OptiScaler.asi** one, the answer is
+   `...\OptiScaler.asi` → **silent REJECT** → no wrapper is installed
+   → `evals=0` → no `Depth`/`MotionVectors`/flags reach the XeFG →
    `input=0 enabled=0` → FG-109.
 
-O ponto 4 é a causa raiz. Os logs fecham o circuito: o hook do RDR2VulkanFG
-está vivo (`commit=0`), mas nunca vê os três nomes serem resolvidos — porque
-o gate que ele aplicaria rejeitaria, e de fato nunca é ativado
-(nenhum `NGX hooks: module=...` / `FG input pipeline v2: accepted SR handle=`
-aparece nos logs do caso).
+Point 4 is the root cause. The logs close the circuit: the RDR2VulkanFG hook
+is alive (`commit=0`), but it never sees the three names being resolved — because
+the gate it would apply would reject them, and in fact it never fires
+(no `NGX hooks: module=...` / `FG input pipeline v2: accepted SR handle=`
+appears in the case logs).
 
-### 2.1 A discrepância dos módulos "nvngx.dll" (pedida para investigar sem assumir)
+### 2.1 The "nvngx.dll" module discrepancy (asked to investigate without assuming)
 
-Concluída e **não é outra causa**: o OptiPatcher (verificado no código-fonte)
-é um binário *pattern-patcher* puro — `VirtualProtect`+`memcpy`, zero hooks,
-zero injeção; ele só NOPa gates de vendor dentro do RDR2.exe em memória e o
-OptiScaler o executa como plugin via loader ASI. Ele **não** interfere no
-`LoadLibrary("nvngx.dll")` do jogo: o que devolve o handle falso é o hook
-`LdrLoadDll` do próprio OptiScaler. Portanto não há dois "nvngx" disputando;
-há um único provedor (OptiScaler) cuja resposta de nome de arquivo o gate do
-RDR2VulkanFG não reconhece.
+Resolved and it's **not another cause**: OptiPatcher (verified in the source code)
+is a pure *pattern-patcher* binary — `VirtualProtect`+`memcpy`, zero hooks,
+zero injection; it only NOPs vendor gates inside RDR2.exe in memory and
+OptiScaler runs it as a plugin via the ASI loader. It does **not** interfere with
+the game's `LoadLibrary("nvngx.dll")`: what returns the fake handle is OptiScaler's own
+`LdrLoadDll` hook. So there are no two "nvngx" fighting;
+there is a single provider (OptiScaler) whose file-name answer the
+RDR2VulkanFG gate does not recognize.
 
-## 3. Por que o OptiScaler "já serve DLSS" mas o FG não liga — e o ABI reverso
+## 3. Why OptiScaler "already serves DLSS" yet FG doesn't turn on — and the reverse ABI
 
-Mesmo se o gate aceitasse, há um segundo abismo de ABI que a ponte também
-resolve. O RDR2VulkanFG lê o objeto de parâmetros NGX por um **mapa de slots
-de vtable fixo e com grupos invertidos** (inputs.cpp:90-103:
+Even if the gate accepted, there's a second ABI abyss the bridge also
+resolves. RDR2VulkanFG reads the NGX parameters object through a **fixed vtable slot
+map with inverted groups** (inputs.cpp:90-103:
 `GetVoidPointer→slot 8`, `GetF→14`, `GetUI→12`, `GetI→11`, `SetI→3`,
-`SetF→6`). A vtable real (cabeçalho `nvsdk_ngx_params.h` v0.9.4) é:
+`SetF→6`). The real vtable (`nvsdk_ngx_params.h` v0.9.4 header) is:
 
 ```
 Set: ULL=0 F=1 D=2 UI=3 I=4 D3D11=5 D3D12=6 void*=7
 Get: ULL=8 F=9 D=10 UI=11 I=12 D3D11=13 D3D12=14 void*=15   Reset=16
 ```
 
-- slot 8: o mapa reverso chama `Get(void**)`; o slot real é `Get(ULL*)`.
-  Atravessa porque o OptiScaler converte `void*↔ULL` nos dois sentidos — o
-  **bridge garante a resposta mesmo quando um slot recusa estritamente**;
-- slots 11/12: `int` ↔ `unsigned` — leitura cruzada que o provedor recusa
+- slot 8: the reverse map calls `Get(void**)`; the real slot is `Get(ULL*)`.
+  It goes through because OptiScaler converts `void*↔ULL` in both directions — the
+  **bridge guarantees the answer even when a slot refuses strictly**;
+- slots 11/12: `int` ↔ `unsigned` — cross-type read that the provider refuses
   (`DLSS.Feature.Create.Flags`, `Width/Height/OutWidth/OutHeight`);
-- slot 14: o mapa reverso chama `GetF`; o slot real é `Get(ID3D12Resource**)`
-  — **limitação conhecida** (seção 6).
+- slot 14: the reverse map calls `GetF`; the real slot is `Get(ID3D12Resource**)`
+  — **known limitation** (section 6).
 
-## 4. O `Vulkan | FSR 2.2.1 | Input: DLSS`
+## 4. The `Vulkan | FSR 2.2.1 | Input: DLSS`
 
-Não é contradição nem DX12 às escondidas:
+It's not a contradiction nor secret DX12:
 
-- `Input: DLSS` = o OptiScaler registrou que a **ponte de input NGX** foi
-  usada (o jogo falou a API DLSS-NGX; quem serve é o OptiScaler). Não indica
-  o upscaler ativo;
-- `FSR 2.2.1`: no caminho Vulkan, o OptiScaler tenta o XeSS-SR **exatamente**
-  via `libxess.dll` contendo as exportações `xessVK*` (um só arquivo;
-  `XeSS_Proxy.h:212-250`, `DllNames.h`). Se o arquivo não está lá/não exporta
-  `xessVK*`, cai silenciosamente no FSR 2.2.1 embutido
-  (`NVNGX_DLSS_Vk.cpp:722-741` + fallback do provedor). A chave correta é
-  `[Upscalers] VulkanUpscaler=xess` — em `[General]` ela é **ignorada**
-  (a amostra `OptiScaler.ini` não tem nenhuma seção `[General]`).
-- Para XeSS-SR de verdade na B390: colocar um `libxess.dll` **do seu próprio
-  sistema/pacote Intel** (com exportações `xessVK*`) na pasta do jogo. Não
-  redistribuímos esse arquivo (licença Intel). O FG do XeFG independe disso —
-  com FSR 2.2.1 como SR, o XeFG 2x pode ligar normalmente (é o modo
-  "FSR-SR + XeFG" aceito no briefing como intermediário).
+- `Input: DLSS` = OptiScaler recorded that the **NGX input bridge** was
+  used (the game spoke the DLSS-NGX API; OptiScaler is what serves it). It does not indicate
+  the active upscaler;
+- `FSR 2.2.1`: on the Vulkan path, OptiScaler tries XeSS-SR **exactly**
+  via a `libxess.dll` containing the `xessVK*` exports (a single file;
+  `XeSS_Proxy.h:212-250`, `DllNames.h`). If the file isn't there/doesn't export
+  `xessVK*`, it silently falls back to the embedded FSR 2.2.1
+  (`NVNGX_DLSS_Vk.cpp:722-741` + provider fallback). The correct key is
+  `[Upscalers] VulkanUpscaler=xess` — in `[General]` it is **ignored**
+  (the sample `OptiScaler.ini` has no `[General]` section at all).
+- For real XeSS-SR on the B390: place a `libxess.dll` **from your own
+  Intel system/package** (with `xessVK*` exports) in the game folder. We do not
+  redistribute that file (Intel license). XeFG's FG is independent of this —
+  with FSR 2.2.1 as SR, the XeFG 2x can turn on normally (it's the
+  "FSR-SR + XeFG" mode accepted in the briefing as an intermediate).
 
-## 5. O que a ponte (zz_ngxbridge.asi) faz — e o que NÃO faz
+## 5. What the bridge (zz_ngxbridge.asi) does — and what it does NOT do
 
-Três mecanismos, cada um na única função que ainda não tinha dono na pilha:
+Three mechanisms, each on the single function that didn't yet have an owner in the stack:
 
-1. **Spoof do caminho do provedor (Spoof=1)** — hook de
-   `GetModuleFileNameW/A` (kernel32 + kernelbase + o próprio IAT do bridge).
-   Só responde diferente quando (a) o handle perguntado é o do OptiScaler **e**
-   (b) o código perguntante pertence a um módulo cujo caminho contém um dos
-   `CallerHints` (default `rdr2vulkanfg`). Responde
-   `<pasta do jogo>\nvngx.dll` — um caminho **fictício, nenhum arquivo é
-   carregado ou precisa existir**. É só o suficiente para o gate do
-   RDR2VulkanFG aceitar; nada mais muda no comportamento do jogo ou do
-   OptiScaler. Perguntas de qualquer outro módulo passam batidas (contador +
+1. **Provider path spoof (Spoof=1)** — hook of
+   `GetModuleFileNameW/A` (kernel32 + kernelbase + the bridge's own IAT).
+   It only answers differently when (a) the handle being asked is OptiScaler's **and**
+   (b) the asking code belongs to a module whose path contains one of the
+   `CallerHints` (default `rdr2vulkanfg`). It answers
+   `<game folder>\nvngx.dll` — a **fictitious path, no file is
+   loaded or needs to exist**. It's just enough for the
+   RDR2VulkanFG gate to accept; nothing else changes in the game's or
+   OptiScaler's behavior. Questions from any other module pass untouched (counter +
    log).
-2. **Espelho tipado da vtable (Mirror=1)** — hook dos **6 exportadores de
-   fábrica de parâmetros** do OptiScaler (`NVSDK_NGX_{VULKAN,D3D12,D3D11}_
-   {AllocateParameters,GetParameters}`; verificados os 6 nomes no código-fonte
-   do 0.9.4). Quando o jogo cria o objeto, o bridge patcheia os 16 slots da
-   vtable dele (VirtualProtect + escreve stubs). Cada stub: (a) chama o slot
-   original do provedor; (b) se o provedor recusar (ou devolver Success com
-   ponteiro nulo em slot de ponteiro), aplica **fallback tipado seguro**:
-   `void*↔ULL`, `int↔unsigned`, `ULL→int` com checagem de faixa, `int→float`
-   só se finito/inteiro. **Nunca** fabrica ponteiro a partir de float,
-   nunca inventa valor, nunca responde frame antigo: se não existe valor
-   válido do frame atual, devolve o mesmo Fail que o provedor daria.
-3. **Observador (log) da resolução de nomes** — hook de
-   `ntdll!LdrGetProcedureAddress`, que **ninguém mais hookiza** na pilha
-   (OptiScaler hookiza LdrLoadDll/NtLoadDll/GetProcAddress; Mor3a hookiza
-   GetProcAddress + exportações NGX; OptiPatcher não hookiza nada). Registra
-   qual módulo pediu qual nome NGX ao handle do OptiScaler — responde na
-   máquina real a última hipótese em aberto (seção 6).
+2. **Typed vtable mirror (Mirror=1)** — hook of OptiScaler's **6 parameter-factory
+   exporters** (`NVSDK_NGX_{VULKAN,D3D12,D3D11}_
+   {AllocateParameters,GetParameters}`; all 6 names verified in the 0.9.4
+   source code). When the game creates the object, the bridge patches the 16 slots of
+   its vtable (VirtualProtect + writes stubs). Each stub: (a) calls the provider's
+   original slot; (b) if the provider refuses (or returns Success with
+   a null pointer in a pointer slot), applies a **safe typed fallback**:
+   `void*↔ULL`, `int↔unsigned`, `ULL→int` with range check, `int→float`
+   only if finite/integral. It **never** fabricates a pointer from a float,
+   never invents a value, never answers with a stale frame: if no valid value
+   from the current frame exists, it returns the same Fail the provider would.
+3. **Observer (log) of name resolution** — hook of
+   `ntdll!LdrGetProcedureAddress`, which **nobody else hooks** in the stack
+   (OptiScaler hooks LdrLoadDll/NtLoadDll/GetProcAddress; Mor3a hooks
+   GetProcAddress + the NGX exports; OptiPatcher hooks nothing). It records
+   which module asked which NGX name from the OptiScaler handle — on the
+   real machine it answers the last open hypothesis (section 6).
 
-**Não faz:** hook de `GetProcAddress` (já pertence a OptiScaler **e** Mor3a;
-um terceiro engine no mesmo endereço — medido — silencia ambos), hook de
-`LdrLoadDll` (não precisa), file `nvngx.dll` em disco (não precisa nem é
-desejável), patch em RDR2.exe/DRM (proibido e desnecessário), alteração de
-OptiScaler/Mor3a/OptiPatcher (nenhum byte tocado). Todos os hooks usam um
-único MinHook estático; o bridge não expõe superfície para outros hookarem.
+**Does not do:** `GetProcAddress` hook (it already belongs to OptiScaler **and** Mor3a;
+a third engine at the same address — measured — silences both), `LdrLoadDll`
+hook (not needed), an `nvngx.dll` file on disk (not needed nor
+desirable), patching RDR2.exe/DRM (forbidden and unnecessary), altering
+OptiScaler/Mor3a/OptiPatcher (not a single byte touched). All hooks use a
+single static MinHook; the bridge exposes no surface for others to hook.
 
-## 6. O que está provado aqui, o que só a B390 prova
+## 6. What is proven here, what only the B390 proves
 
-**Provado neste ambiente (Fedora 44 + MinGW + Wine 11.20, sem RDR2):**
-cadeia completa de eventos com mocks fiéis (ver `TEST-RESULTS.md`): spoof
-entregue → gate aceita → wrapper instalado → observador vê `Depth`/
-`MotionVectors` reais no `EvaluateFeature` dos dois frames → leitura cruzada
-de tipo salva pelo espelho (`MIRROR-CROSS-TYPE-OK`). Testes unitários da
-lógica de coerção: verde. Compilação Windows x64 real do `.asi`.
+**Proven in this environment (Fedora 44 + MinGW + Wine 11.20, no RDR2):**
+the full chain of events with faithful mocks (see `TEST-RESULTS.md`): spoof
+delivered → gate accepts → wrapper installed → observer sees real `Depth`/
+`MotionVectors` in the `EvaluateFeature` of both frames → cross-type read
+saved by the mirror (`MIRROR-CROSS-TYPE-OK`). Unit tests of the
+coercion logic: green. Real Windows x64 compilation of the `.asi`.
 
-**A provar na B390 (sem atalho honesto):**
-1. *Caminho de resolução do jogo:* o gate do Mor3a só existe se a resolução
-   `GetProcAddress` do jogo passar pelo hook dele. O observador registra a
-   pilha de cada resolução (`resolved '...' by <módulo>` = o primeiro módulo
-   não-sistema na pilha de quem pediu o símbolo — trampolins de hook e
-   forwarders kernel32/kernelbase são pulados). Leitura:
-   `by RDR2VulkanFG.asi` = a resolução passou pelo hook global do Mor3a → o
-   gate vê o evento e o spoof dispara (melhor caso, é o que a cadeia de
-   testes demonstra); `by RDR2.exe` = o jogo resolveu contornando o hook do
-   Mor3a → o gate nunca veria os três nomes e a correção precisaria de outro
-   ponto de injeção (o log prova qual e onde). Até essa linha existir no log
-   real, **não afirmamos
-   "funciona no RDR2"**, apenas "a causa raiz foi eliminada no ponto
-   comprovado".
-2. *Jitter:* o `GetF` reverso do Mor3a (slot 14 = real `Get(D3D12**)`) não
-   consegue ler os floats de `Jitter.Offset.X/Y` gravados pelo jogo no slot
-   real de float — o espelho **se recusa** a responder float como ponteiro
-   (seria um valor legítimo entregue num tipo falso; arriscado para
-   qualquer outro leitor do slot). Consequência esperada: FG liga com
-   depth+MV+flags corretos, mas `jitter=(0.0000,0.0000)` no log do Mor3a
-   (reprojeção sem compensação de jitter — qualidade pode ficar aquém do
-   ideal). Follow-up seguro e pequeno: permitir essa coerção **apenas** para
-   as duas chaves de jitter conhecidas, com flag de ini. Documentado, não
-   implementado (mínimo necessário para ligar o FG primeiro).
-3. Validação final de performance/estabilidade na B390 (fora do escopo deste
-   ambiente de desenvolvimento, por construção).
+**To prove on the B390 (no honest shortcut):**
+1. *Game resolution path:* Mor3a's gate only exists if the game's
+   `GetProcAddress` resolution goes through its hook. The observer records
+   the stack of each resolution (`resolved '...' by <module>` = the first non-system
+   module on the stack of whoever asked for the symbol — hook trampolines and
+   kernel32/kernelbase forwarders are skipped). Reading:
+   `by RDR2VulkanFG.asi` = the resolution went through Mor3a's global hook → the
+   gate sees the event and the spoof fires (best case, it's what the test chain
+   demonstrates); `by RDR2.exe` = the game resolved bypassing Mor3a's
+   hook → the gate would never see the three names and the fix would need another
+   injection point (the log proves which and where). Until this line exists in the real
+   log, **we do not claim
+   "it works in RDR2"**, only "the root cause was eliminated at the proven
+   point".
+2. *Jitter:* Mor3a's reverse `GetF` (slot 14 = real `Get(D3D12**)`) cannot
+   read the `Jitter.Offset.X/Y` floats stored by the game in the real float
+   slot — the mirror **refuses** to answer a float as a pointer
+   (it would be a legitimate value delivered in a wrong type; risky for
+   any other reader of the slot). Expected consequence: FG turns on with
+   correct depth+MV+flags, but `jitter=(0.0000,0.0000)` in Mor3a's log
+   (reprojection without jitter compensation — quality may fall short of
+   ideal). Safe and small follow-up: allow this coercion **only** for
+   the two known jitter keys, with an ini flag. Documented, not
+   implemented (the minimum needed to get FG turning on first).
+3. Final performance/stability validation on the B390 (out of scope for this
+   development environment, by construction).
 
-## 7. Critério de sucesso na máquina real
+## 7. Success criterion on the real machine
 
-Na ordem, nos logs:
+In order, in the logs:
 
 1. `RDR2VulkanFG\ngxbridge.log`: `spoofed provider path for capture module: ...nvngx.dll`;
 2. `RDR2VulkanFG\RDR2VulkanFG.log`: `NGX hooks: module=... commit=0 ...`
-   (o probe aceitou; antes nunca aparecia);
+   (the probe accepted; before it never appeared);
 3. `FG input pipeline v2: accepted SR handle=... flags=0x... render=... output=...`;
 4. `NGX inputs first valid: depth ... mvec ... jitter ... mvScale ...`;
-5. telemetria: `input=1 ... enabled=1`; `wd: evals>0`; FG-109 some; 2x
-   frames reais no OSD do XeFG.
+5. telemetry: `input=1 ... enabled=1`; `wd: evals>0`; FG-109 disappears; 2x
+   real frames in the XeFG OSD.

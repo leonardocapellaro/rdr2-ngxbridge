@@ -1,122 +1,122 @@
-# CHANGES — o que este pacote adiciona (e o que não toca)
+# CHANGES — what this package adds (and what it doesn't touch)
 
-## Nada existente foi modificado
+## Nothing existing was modified
 
-Zero bytes alterados em: OptiScaler 0.9.4, RDR2VulkanFG (Mor3a 1.0 beta),
-OptiPatcher, loader ASI dinput8, fakenvapi, RDR2.exe, DRM, configs existentes.
-Os repositórios `OptiScaler/` e `rdr2-vulkan-frame-generation/` continuam
-intactos (os caminhos citados em DIAGNOSIS.md são só leitura).
+Zero bytes changed in: OptiScaler 0.9.4, RDR2VulkanFG (Mor3a 1.0 beta),
+OptiPatcher, dinput8 ASI loader, fakenvapi, RDR2.exe, DRM, existing configs.
+The `OptiScaler/` and `rdr2-vulkan-frame-generation/` repositories remain
+intact (the paths cited in DIAGNOSIS.md are read-only).
 
-## Arquivos novos (tudo)
+## New files (everything)
 
-| Caminho | O que é |
+| Path | What it is |
 |---|---|
-| `case/ngxbridge/src/ngxbridge.cpp` | código da ponte (ASI único, ~600 linhas C++17) |
-| `case/ngxbridge/src/mirror_core.{h,cpp}` | ABI compartilhada versionada: mapa de slots real, tabela de coerção defensiva |
-| `case/ngxbridge/tests/test_mirror.cpp` | testes unitários nativos da coerção |
-| `case/ngxbridge/mock/` | mocks fiéis p/ self-test (game/OptiScaler/Mor3a) — nunca instalados no jogo |
-| `case/ngxbridge/build.sh`, `selftest/run_wine.sh` | build MinGW Windows-x64 + self-test automatizado |
-| `release/` | este pacote (binário, ini, scripts, docs, self-test Windows) |
+| `case/ngxbridge/src/ngxbridge.cpp` | the bridge's code (single ASI, ~600 lines C++17) |
+| `case/ngxbridge/src/mirror_core.{h,cpp}` | versioned shared ABI: real slot map, defensive coercion table |
+| `case/ngxbridge/tests/test_mirror.cpp` | native unit tests of the coercion |
+| `case/ngxbridge/mock/` | faithful mocks for the self-test (game/OptiScaler/Mor3a) — never installed in the game |
+| `case/ngxbridge/build.sh`, `selftest/run_wine.sh` | MinGW Windows-x64 build + automated self-test |
+| `release/` | this package (binary, ini, scripts, docs, Windows self-test) |
 
-## Decisões de projeto (e por quê)
+## Design decisions (and why)
 
-1. **ASI único chamado `zz_ngxbridge.asi`** — o prefixo `zz` garante que o
-   loader ASI o carregue por último (ordem alfabética), depois de OptiScaler
-   e RDR2VulkanFG, então ele observa e estende um estado já montado. Não
-   substitui nem precede ninguém.
-2. **Sem hook de `GetProcAddress`.** Ele já tem DOIS donos na pilha:
-   OptiScaler (kernel32+kernelbase, sempre com fall-through) e Mor3a (MS
-   Detours). Um terceiro engine inline no mesmo endereço — medido na prática
-   — silencia as camadas anteriores. Tudo no bridge foi reposicionado para
-   superfícies sem dono: `GetModuleFileNameW/A`, `ntdll!LdrGetProcedureAddress`
-   e os corpos das 6 exportações de fábrica de parâmetros.
-3. **Nenhum `nvngx.dll` em disco.** O spoof é só a resposta de nome para o
-   perguntante certo; carregar um arquivo falso criaria um módulo real na
-   frente do OptiScaler (regressão de upscale) — inaceitável (§6).
-4. **Spoof com escopo de chamador** (handle do OptiScaler + caminho do
-   perguntante ∈ `CallerHints`): nenhum outro módulo percebe o bridge. É a
-   menor superfície possível para satisfazer exatamente o gate do Mor3a.
-5. **Espelho só nos 6 objetos de fábrica**: vtables são patcheadas por
-   objeto novo (idempotente, mapa protegido por mutex, nunca liberadas — o
-   objeto vive enquanto o OptiScaler vive; sem acesso a recurso Vulkan após
-   liberação porque o bridge não toca recursos Vulkan, só a mesa de valores
-   tipados do objeto de parâmetros).
-6. **Coerção defensiva com lista fechada** (`MirrorCoerce` em mirror_core.h,
-   documentada linha a linha): `Ptr↔ULL` sempre; `I↔UI` com extensão/sinal
-   corretos; `ULL→I` com checagem de faixa; `F/D→int` só se finito e integral;
-   **nunca** `F→Ptr` nem nenhum tipo→ponteiro que não seja ULL/Ptr. Recusou-
-   se deliberadamente responder jitter-float pelo slot de ponteiro — documentado
-   em DIAGNOSIS §6.2 como limitação com follow-up, em vez de esconder o erro
-   com um valor falso.
-7. **Instrumentação sem spam**: macros `LOGT` com "primeiros N + a cada 600";
-   contadores de GPFN, spoof, alocações e resoluções observadas. Nada por
+1. **A single ASI named `zz_ngxbridge.asi`** — the `zz` prefix ensures the
+   ASI loader loads it last (alphabetical order), after OptiScaler
+   and RDR2VulkanFG, so it observes and extends an already-assembled state. It
+   neither replaces nor precedes anything.
+2. **No `GetProcAddress` hook.** It already has TWO owners in the stack:
+   OptiScaler (kernel32+kernelbase, always with fall-through) and Mor3a (MS
+   Detours). A third inline engine at the same address — measured in practice
+   — silences the previous layers. Everything in the bridge was repositioned to
+   ownerless surfaces: `GetModuleFileNameW/A`, `ntdll!LdrGetProcedureAddress`
+   and the bodies of the 6 parameter-factory exports.
+3. **No `nvngx.dll` on disk.** The spoof is just the name answer to the
+   right asker; loading a fake file would create a real module in
+   front of OptiScaler (upscaling regression) — unacceptable (§6).
+4. **Spoof with caller scoping** (OptiScaler handle + asker path
+   ∈ `CallerHints`): no other module notices the bridge. It's the
+   smallest possible surface to satisfy exactly the Mor3a gate.
+5. **Mirror only on the 6 factory objects**: vtables are patched per
+   new object (idempotent, map protected by mutex, never freed — the
+   object lives as long as OptiScaler lives; no access to a Vulkan resource after
+   release because the bridge doesn't touch Vulkan resources, only the typed
+   values table of the parameters object).
+6. **Defensive coercion with a closed list** (`MirrorCoerce` in mirror_core.h,
+   documented line by line): `Ptr↔ULL` always; `I↔UI` with correct
+   sign/extension; `ULL→I` with range check; `F/D→int` only if finite and integral;
+   **never** `F→Ptr` nor any type→pointer coercion other than ULL/Ptr. We deliberately
+   refused to answer jitter-float through the pointer slot — documented
+   in DIAGNOSIS §6.2 as a limitation with a follow-up, instead of hiding the error
+   with a bogus value.
+7. **Instrumentation without spam**: `LOGT` macros with "first N + every 600";
+   counters for GPFNs, spoofs, allocations and observed resolutions. Nothing per
    frame.
 
-## Mapa de posse de hooks (estado final da pilha)
+## Hook ownership map (final state of the stack)
 
 | API | OptiScaler | Mor3a (RDR2VulkanFG) | zz_ngxbridge |
 |---|---|---|---|
 | `LdrLoadDll`/`NtLoadDll` | hook | — | — |
-| `GetProcAddress` (k32/kb) | hook (fall-through) | Detours | — (não toca) |
-| `GetModuleFileNameW/A` | — | — | hook (escopo de chamador) |
-| `LdrGetProcedureAddress` | — | — | hook (observador log-only) |
-| exportações `NVSDK_NGX_VULKAN_{Create,Create1,Evaluate}` | — | Detours (só após gate aceitar) | — |
-| exportações `{Allocate,Get}Parameters` × 3 APIs | — | — | hook (instala espelho) |
-| vtable dos objetos de parâmetros | — | lida por mapa reverso | stubs tipados por objeto |
+| `GetProcAddress` (k32/kb) | hook (fall-through) | Detours | — (doesn't touch) |
+| `GetModuleFileNameW/A` | — | — | hook (caller scoping) |
+| `LdrGetProcedureAddress` | — | — | hook (log-only observer) |
+| `NVSDK_NGX_VULKAN_{Create,Create1,Evaluate}` exports | — | Detours (only after the gate accepts) | — |
+| `{Allocate,Get}Parameters` exports × 3 APIs | — | — | hook (installs the mirror) |
+| vtable of the parameter objects | — | read via reverse map | typed stubs per object |
 
-## v0.1.1 — correções da revisão pré-entrega
+## v0.1.1 — fixes from the pre-delivery review
 
-Uma revisão adversarial do código (achados de code-review + smoke test dos
-`.bat` sob Wine) encontrou e corrigiu 11 problemas. Os que importam para quem
-vai rodar no jogo:
+An adversarial code review (code-review findings + `.bat` smoke test
+under Wine) found and fixed 11 problems. The ones that matter for anyone
+who will run this in the game:
 
-| # | Problema | Consequência sem correção | Correção |
+| # | Problem | Consequence without the fix | Fix |
 |---|---|---|---|
-| R1 | Corrida em `MirrorEnsureObject` (checagem/patch/registro não atômicos) | dois threads criando o 1º objeto de cada classe podiam salvar stubs como "originais" → **auto-recursão → stack overflow**, ou drops silenciosos do provedor | seção crítica única cobre check+patch+registro |
-| R2 | `wcscpy` sem limite em `g_fakePath[MAX_PATH]` | caminho do OptiScaler ≥251 chars → **estouro de buffer** em .bss | montagem verificada; caminho longo demais desliga só o spoof, logado |
-| R3 | `fprintf`/`fflush` executando sob a **loader lock** (hooks de GPFN/`LdrGPA`) | deadlock clássico loader-lock↔heap travando o boot do jogo | fila estática lock-free (sem heap) drena num thread normal |
-| R4 | Observador obrigatório (`!anyL` desarmava tudo) | hook de **log** fracassar desligava o **fix** | só o spoof é load-bearing; observador/espelho degradam com aviso |
-| R5 | `HookBoth` aceitava kernelbase como suficiente | kernel32 não hookado → forwarder disfarça o chamador → spoof nunca dispara **em silêncio** | kernel32 é obrigatório; falha é logada como CRITICAL e o resto arma p/ diagnóstico |
-| R6 | `Reset()` (slot 16) nunca espelhado | leitura cruzada pós-Reset responderia **valor antigo** (possível recurso já liberado) — viola o §6 do briefing | slot 16 patcheado; `Reset` apaga a memória do espelho (teste `STALE-GUARD-OK`) |
-| R7 | Alvo procurado por só 30 s e desistência eterna | OptiScaler lento (boot com muitos MODs) = bridge inerte a sessão toda | polling enquanto o processo viver, aviso após ~30 s |
-| R8 | Observador sempre atribuía "by kernel32.dll" | as perguntas §9 ("quem resolveu?") respondidas erradas | `RtlCaptureStackBackTrace` pulando sistema/trampolins; factories também atribuem |
-| R9 | Contador com wrap pulando um `NoteSet` a cada 2^32 | 1 registro perdido por volta (comentário dizia "inofensivo" — não era) | incremento vira só estatística; store sempre acontece |
-| R10 | `install.bat` rodando na própria pasta copiada (modo README): move p/ backup e copia de fonte já movida | **instalação falhava no fluxo principal documentado** | modo in-place detectado; backup só no modo com argumento |
-| R11 | `%date%` p/ carimbo de backup + caminho sem `\` no argumento + `if` encadeado que wine/cmd não engolem | carimbo inválido, concatenação quebrada, uninstall sem efeito | carimbo `%time%`, normalização de path, `goto` no lugar do `if` duplo |
+| R1 | Race in `MirrorEnsureObject` (check/patch/registration not atomic) | two threads creating the 1st object of each class could save stubs as "originals" → **self-recursion → stack overflow**, or silent provider drops | a single critical section covers check+patch+registration |
+| R2 | `wcscpy` without bound in `g_fakePath[MAX_PATH]` | OptiScaler path ≥251 chars → **buffer overflow** in .bss | verified assembly; a too-long path disables only the spoof, logged |
+| R3 | `fprintf`/`fflush` executing under the **loader lock** (GPFN/`LdrGPA` hooks) | classic loader-lock↔heap deadlock freezing the game's boot | static lock-free queue (no heap) drained on a normal thread |
+| R4 | Mandatory observer (`!anyL` disarmed everything) | failing the **log** hook turned off the **fix** | only the spoof is load-bearing; observer/mirror degrade with a warning |
+| R5 | `HookBoth` accepted kernelbase as sufficient | kernel32 not hooked → the forwarder disguises the caller → the spoof never fires **in silence** | kernel32 is mandatory; the failure is logged as CRITICAL and the rest arms for diagnostics |
+| R6 | `Reset()` (slot 16) never mirrored | the post-Reset cross-type read would answer the **stale value** (possibly an already-freed resource) — violates briefing §6 | slot 16 patched; `Reset` clears the mirror's memory (test `STALE-GUARD-OK`) |
+| R7 | Target searched for only 30 s then eternal give-up | slow OptiScaler (boot with many MODs) = bridge inert the whole session | polling while the process lives, warning after ~30 s |
+| R8 | Observer always attributed "by kernel32.dll" | the §9 questions ("who resolved?") answered wrong | `RtlCaptureStackBackTrace` skipping system/trampolines; factories also attribute |
+| R9 | Counter wrapping and skipping one `NoteSet` every 2^32 | 1 record lost per wrap (the comment said "harmless" — it wasn't) | the increment becomes statistics only; the store always happens |
+| R10 | `install.bat` running in its own copied folder (README mode): moves to backup and copies from a source already moved | **installation failed in the documented main flow** | in-place mode detected; backup only in the with-argument mode |
+| R11 | `%date%` for the backup timestamp + path without `\` in the argument + chained `if` that wine/cmd won't swallow | invalid timestamp, broken concatenation, uninstall without effect | `%time%` stamp, path normalization, `goto` instead of the double `if` |
 
-Instalador/desinstalador foram testados sob Wine nos 5 fluxos (instalação
-limpa com argumento, upgrade com backup+restore, uninstall com restore, modo
-in-place, uninstall sem backup). Self-test com a nova condição `STALE-GUARD-OK`
-e atribuição de chamador: PASS.
+The installer/uninstaller were tested under Wine across the 5 flows (clean
+installation with argument, upgrade with backup+restore, uninstall with restore,
+in-place mode, uninstall without backup). Self-test with the new `STALE-GUARD-OK`
+condition and caller attribution: PASS.
 
-## v0.1.2 — correção apontada pelo cmd.exe real da máquina de destino
+## v0.1.2 — fix pointed out by the target machine's real cmd.exe
 
-| # | Problema | Consequência | Correção |
+| # | Problem | Consequence | Fix |
 |---|---|---|---|
-| R12 | `run_selftest.bat`: `if exist … (type …) else (echo (SEM LOG…))` — o `)` do echo fecha o bloco `else` cedo; o Wine perdoa, o **cmd.exe real reprova** (`) foi inesperado`) e o script morre antes do veredito | self-test na Windows real imprimia o stdout, mas não o log da ponte nem `SELFTEST: PASS`/`FAIL` | impressão via `type … 2>nul \|\| echo …`, sem parênteses; único caso do padrão em todo o pacote (demais `(` em `echo` estão fora de blocos e são literais) |
+| R12 | `run_selftest.bat`: `if exist … (type …) else (echo (SEM LOG…))` — the `)` of the echo closes the `else` block early; Wine forgives it, but the **real cmd.exe rejects it** (`) foi inesperado`) and the script dies before the verdict | the self-test on real Windows printed the stdout, but not the bridge log nor `SELFTEST: PASS`/`FAIL` | printing via `type … 2>nul \|\| echo …`, without parentheses; the only case of this pattern in the whole package (the other `(` in `echo` are outside blocks and are literals) |
 
-Nenhum `.asi` alterado entre 0.1.1 e 0.1.2 — só o `.bat` do self-test e a
-versão declarada (nome/hash do pacote). Os 4 critérios de stdout já apareciam
-no relatório do cmd real; os 2 do log da ponte (spoof + vtable) foram
-verificáveis por `findstr` no mesmo diretório de execução.
+No `.asi` changed between 0.1.1 and 0.1.2 — only the self-test `.bat` and the
+declared version (package name/hash). The 4 stdout criteria already appeared
+in the real cmd report; the 2 from the bridge log (spoof + vtable) were
+verifiable via `findstr` in the same execution directory.
 
-## Conformidade com as restrições do briefing (§6)
+## Compliance with the briefing's constraints (§6)
 
-- sem hooks recursivos/duplicados: um único MinHook, zero sobreposição de endereços ✔
-- sem deadlock entre mutex/apresentação/filas Vulkan: único mutex é o mapa de
-  valores do espelho (nunca segurando locks de apresentação; stubs não
-  chamam Vulkan) ✔
-- sem acesso a recurso Vulkan após liberação: bridge não toca recursos ✔
-- sem frame anterior como válido / sem inventar motion vectors: coerções só
-  reformatam o valor do próprio frame atual; sem valor atual → o Fail original
-  do provedor ✔
-- verificações de segurança não desligadas para esconder erro: o gate do
-  Mor3a continua ativo; a ponte só torna a resposta de nome honesta sobre um
-  provedor real (OptiScaler) — recusou-se coerção perigosa documentada ✔
-- RDR2.exe/DRM/proteções intocados ✔
-- sem regressão no upscaling Vulkan: OptiScaler continua servendo tudo; o
-  spoof é invisível fora do chamador-alvo ✔
-- ABI compartilhada versionada/documentada/defensiva/fallback: `mirror_core`
-  com tabela explícita + testes ✔
-- binário Windows x64 real compilado (não fictício): `zz_ngxbridge.asi`
-  construído com MinGW 16.2.1 (ABI MSVC x64), auto-testado sob Wine ✔
+- no recursive/duplicated hooks: a single MinHook, zero address overlap ✔
+- no deadlock between mutex/present/Vulkan queues: the only mutex is the mirror's
+  value map (never holding present locks; stubs don't
+  call Vulkan) ✔
+- no access to a Vulkan resource after release: the bridge doesn't touch resources ✔
+- no previous frame as valid / no invented motion vectors: coercions only
+  reformat the current frame's own value; no current value → the provider's original
+  Fail ✔
+- safety checks not turned off to hide an error: the Mor3a
+  gate stays active; the bridge only makes the name answer honest about a
+  real provider (OptiScaler) — dangerous coercion refused, documented ✔
+- RDR2.exe/DRM/protections untouched ✔
+- no regression in Vulkan upscaling: OptiScaler keeps serving everything; the
+  spoof is invisible outside the target caller ✔
+- versioned/documented/defensive/fallback shared ABI: `mirror_core`
+  with explicit table + tests ✔
+- real compiled Windows x64 binary (not fictitious): `zz_ngxbridge.asi`
+  built with MinGW 16.2.1 (MSVC x64 ABI), self-tested under Wine ✔

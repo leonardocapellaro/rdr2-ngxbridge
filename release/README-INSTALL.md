@@ -1,95 +1,95 @@
-# zz_ngxbridge — instalação (RDR2 Vulkan + XeFG na Arc B390)
+# zz_ngxbridge — installation (RDR2 Vulkan + XeFG on the Arc B390)
 
-**O que é:** uma ponte (`.asi` único) que faz o OptiScaler 0.9.4 (que serve o
-upscaling Vulkan) e o RDR2VulkanFG/Mor3a beta (XeFG 2x) se reconhecerem. A
-causa raiz do FG nunca ligar (`input=0`, FG-109) está explicada em
-`DIAGNOSIS.md`. O bridge **não substitui nem modifica** nenhum dos seus
-componentes.
+**What it is:** a bridge (a single `.asi`) that makes OptiScaler 0.9.4 (which serves
+the Vulkan upscaling) and RDR2VulkanFG/Mor3a beta (XeFG 2x) recognize each other. The
+root cause of FG never turning on (`input=0`, FG-109) is explained in
+`DIAGNOSIS.md`. The bridge **does not replace or modify** any of your
+components.
 
-**Status honesto:** construído por análise de código + logs do seu setup, com
-self-test automatizado verde (mocks fiéis). **Ainda não validado na B390 com
-o RDR2 real** — os logs abaixo dizem exatamente até onde a cadeia chegou.
+**Honest status:** built by code analysis + logs from your setup, with
+a green automated self-test (faithful mocks). **Still not validated on the B390 with
+real RDR2** — the logs below say exactly how far the chain got.
 
 ---
 
-## Requisitos (o que você já tem)
+## Requirements (what you already have)
 
-- RDR2 Epic na pasta padrão com: `OptiScaler.asi` (0.9.4) + OptiPatcher,
-  `RDR2VulkanFG.asi` (beta do Mor3a) ou equivalente + loader `dinput8.dll`,
-  `fakenvapi.dll` (opcional);
-- renderizador do jogo em **Vulkan**;
-- Em `OptiScaler.ini`: `[Inputs] EnableDlssInputs=true` (sem isso a superfície
-  NGX-Vulkan nem existe) e `[Upscalers] VulkanUpscaler=xess` (atenção: a chave
-  é `[Upscalers]`, em `[General]` ela é ignorada).
+- RDR2 Epic in the default folder with: `OptiScaler.asi` (0.9.4) + OptiPatcher,
+  `RDR2VulkanFG.asi` (Mor3a's beta) or equivalent + `dinput8.dll` loader,
+  `fakenvapi.dll` (optional);
+- game renderer set to **Vulkan**;
+- In `OptiScaler.ini`: `[Inputs] EnableDlssInputs=true` (without it the NGX-Vulkan surface
+  doesn't even exist) and `[Upscalers] VulkanUpscaler=xess` (note: the key is
+  `[Upscalers]`; in `[General]` it is ignored).
 
-## Instalação (2 passos)
+## Installation (2 steps)
 
-1. Copie **esta pasta `release` inteira** para dentro da pasta do RDR2 (a do
+1. Copy **this entire `release` folder** into the RDR2 folder (the one with
    `RDR2.exe`).
-2. Rode `install.bat` (duplo clique). Ele só cria/backupa arquivos
-   `zz_ngxbridge.*` e avisa se OptiScaler ou o loader não aparecem na pasta.
+2. Run `install.bat` (double-click). It only creates/backups
+   `zz_ngxbridge.*` files and warns if OptiScaler or the loader don't appear in the folder.
 
-Para remover: `uninstall.bat` (restaura backup anterior, se havia).
+To remove: `uninstall.bat` (restores the previous backup, if there was one).
 
-## Validação rápida ANTES de abrir o jogo
+## Quick validation BEFORE opening the game
 
-Rode `selftest-windows\run_selftest.bat` — usa só DLLs falsas da pasta do
-próprio pacote, não toca o jogo. Deve imprimir `SELFTEST: PASS`. Se falhar já
-no Windows, o problema é ambiente (antivírus bloqueando injeção? rode o jogo
-também sem bloqueio).
+Run `selftest-windows\run_selftest.bat` — it only uses the fake DLLs from the
+package's own folder, it doesn't touch the game. It must print `SELFTEST: PASS`. If it fails already
+in Windows, the problem is the environment (antivirus blocking injection? run the game
+without blocking too).
 
-## O que esperar no jogo
+## What to expect in the game
 
-1. Jogo abre com Vulkan + upscale normalmente (o upscaling **não** muda);
-2. Log da ponte em `RDR2VulkanFG\ngxbridge.log` deve ter, na ordem:
+1. The game opens with Vulkan + upscaling as usual (the upscaling does **not** change);
+2. The bridge log in `RDR2VulkanFG\ngxbridge.log` should contain, in order:
    - `spoofed provider path for capture module: ...\nvngx.dll` (1-2×);
-   - `resolved 'NVSDK_NGX_VULKAN_...' from the OptiScaler handle by <módulo>` — o `<módulo>` é o primeiro componente não-sistema na pilha de quem pediu o símbolo (tipicamente `RDR2VulkanFG.asi`, pois o hook global dele encaminha a chamada; ver DIAGNOSIS §6.1);
-   - `intercepted NVSDK_NGX_VULKAN_AllocateParameters ... by <exe do jogo>` — o jogo criou o objeto de parâmetros;
-   - `mirror: ... parameter-factory export hooks created` (6/6 no OptiScaler real) e
+   - `resolved 'NVSDK_NGX_VULKAN_...' from the OptiScaler handle by <module>` — `<module>` is the first non-system component on the stack of whoever requested the symbol (typically `RDR2VulkanFG.asi`, since its global hook forwards the call; see DIAGNOSIS §6.1);
+   - `intercepted NVSDK_NGX_VULKAN_AllocateParameters ... by <game exe>` — the game created the parameters object;
+   - `mirror: ... parameter-factory export hooks created` (6/6 on the real OptiScaler) and
      `mirror: vtable ... patched (16 typed slots)`;
-3. Log do RDR2VulkanFG (o dele, na mesma pasta) deve passar a ter o que
-   **nunca apareceu** nos seus logs atuais:
+3. The RDR2VulkanFG log (its own, in the same folder) should start showing what
+   **never appeared** in your current logs:
    - `NGX hooks: module=... commit=0 ...`
    - `FG input pipeline v2: accepted SR handle=... flags=...`
    - `NGX inputs first valid: depth ... mvec ... jitter ...`
-4. Telemetria/watchdog: `evals>0`, `input=1`, `enabled=1`, FG-109 ausente,
-   2× frames no OSD do XeFG.
+4. Telemetry/watchdog: `evals>0`, `input=1`, `enabled=1`, FG-109 absent,
+   2× frames in the XeFG OSD.
 
-## Sobre `FSR 2.2.1` vs XeSS-SR (não é bug do bridge)
+## About `FSR 2.2.1` vs XeSS-SR (not a bridge bug)
 
-O OSD `Vulkan | FSR 2.2.1 | Input: DLSS` que você via é o fallback silencioso
-do OptiScaler: no caminho Vulkan ele só aceita XeSS-SR se existir um
-`libxess.dll` com exportações `xessVK*` na pasta do jogo (DIAGNOSIS §4). O
-XeFG **funciona com FSR 2.2.1 como SR** (modo aceito no briefing). Se quiser
-XeSS-SR por cima, você mesmo coloca um `libxess.dll` seu na pasta (não
-redistribuímos componentes Intel).
+The `Vulkan | FSR 2.2.1 | Input: DLSS` OSD you were seeing is OptiScaler's silent
+fallback: on the Vulkan path it only accepts XeSS-SR if a
+`libxess.dll` with `xessVK*` exports exists in the game folder (DIAGNOSIS §4). The
+XeFG **works with FSR 2.2.1 as SR** (accepted mode in the briefing). If you want
+XeSS-SR on top, you place your own `libxess.dll` in the folder yourself (we do not
+redistribute Intel components).
 
-## Solução de problemas
+## Troubleshooting
 
-| Sintoma | Causa provável / o que fazer |
+| Symptom | Probable cause / what to do |
 |---|---|
-| `RDR2VulkanFG\ngxbridge.log` ausente | ASI loader não carregou o bridge → confira `dinput8.dll` na pasta e o nome `zz_ngxbridge.asi` (o `zz` é para carregar por último) |
-| Log existe, mas nunca `spoofed provider path` | o caminho do seu ASI do Mor3a não contém `rdr2vulkanfg` (renomeado?) → ajuste `CallerHints` no `zz_ngxbridge.ini` e reinicie; ou o jogo não está no Vulkan |
-| `spoofed provider path` sim, mas nenhum `NGX hooks:`/`accepted SR handle` no log do Mor3a | mande os dois logs (o do bridge tem a linha `resolved ... by <modulo>` que fecha o diagnóstico — ver DIAGNOSIS §6.1) |
-| FG liga mas trepida/piora em movimento | esperado: leitura de jitter falha pelo ABI reverso (DIAGNOSIS §6.2) — documentado, com follow-up pequeno |
-| Antivírus/Defender gritando com `.asi` | injeção em processo de jogo é o que todo ASI loader faz; adicione a pasta à exceção (é o seu OptiScaler/loader que já faz isso) |
+| `RDR2VulkanFG\ngxbridge.log` missing | the ASI loader didn't load the bridge → check `dinput8.dll` in the folder and the name `zz_ngxbridge.asi` (the `zz` is to make it load last) |
+| Log exists but never `spoofed provider path` | your Mor3a ASI path doesn't contain `rdr2vulkanfg` (renamed?) → adjust `CallerHints` in `zz_ngxbridge.ini` and restart; or the game isn't on Vulkan |
+| `spoofed provider path` yes, but no `NGX hooks:`/`accepted SR handle` in the Mor3a log | send both logs (the bridge log has the `resolved ... by <module>` line that closes the diagnosis — see DIAGNOSIS §6.1) |
+| FG turns on but stutters/worsens in motion | expected: jitter read fails via the reverse ABI (DIAGNOSIS §6.2) — documented, with a small follow-up |
+| Antivirus/Defender complaining about `.asi` | injection into a game process is what every ASI loader does; add the folder to the exception (it's your OptiScaler/loader that already does this) |
 
-## Arquivos
+## Files
 
-| Arquivo | Papel |
+| File | Role |
 |---|---|
-| `zz_ngxbridge.asi` / `zz_ngxbridge.ini` | a ponte + config (chaves documentadas no próprio ini) |
-| `install.bat` / `uninstall.bat` | instalação/rollback com backup |
-| `selftest-windows/` | autoteste que não toca o jogo |
-| `DIAGNOSIS.md` | causa raiz com evidência de código e logs |
-| `CHANGES.md` | o que muda (nada existente) e mapa de posse de hooks |
-| `TEST-RESULTS.md` | transcrições de teste |
-| `BUILD.md` | como o binário foi compilado (MinGW, sem MSVC) |
-| `THIRD-PARTY-NOTICES.txt` | licenças (só MinHook MIT; nada proprietário incluso) |
-| `SHA-256SUMS.txt` | integridade dos arquivos |
+| `zz_ngxbridge.asi` / `zz_ngxbridge.ini` | the bridge + config (keys documented in the ini itself) |
+| `install.bat` / `uninstall.bat` | installation/rollback with backup |
+| `selftest-windows/` | self-test that doesn't touch the game |
+| `DIAGNOSIS.md` | root cause with code and log evidence |
+| `CHANGES.md` | what changes (nothing existing) and the hook ownership map |
+| `TEST-RESULTS.md` | test transcriptions |
+| `BUILD.md` | how the binary was compiled (MinGW, no MSVC) |
+| `THIRD-PARTY-NOTICES.txt` | licenses (only MinHook MIT; no proprietary content included) |
+| `SHA-256SUMS.txt` | file integrity |
 
-## Se algo der errado
+## If something goes wrong
 
-`uninstall.bat` remove tudo (restaura o estado anterior em segundos). Logs
-úteis para reporte: `RDR2VulkanFG\ngxbridge.log`, o log do RDR2VulkanFG e um
-print do OSD do OptiScaler.
+`uninstall.bat` removes everything (restores the previous state in seconds). Useful
+logs for a report: `RDR2VulkanFG\ngxbridge.log`, the RDR2VulkanFG log and a
+screenshot of the OptiScaler OSD.

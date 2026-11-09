@@ -1,29 +1,29 @@
-# Self-test no Windows (antes de instalar no jogo)
+# Self-test on Windows (before installing in the game)
 
-Rodar isto **não toca o jogo nem nenhum dos seus MODs** — nada aqui é
-copiado para o diretório do RDR2, nenhum arquivo deste pacote toca o jogo.
-O `mock_game.exe` carrega apenas as três DLLs falsas desta pasta e exerce a
-cadeia completa: spoof do provedor → gate do "Mor3a" aceita → espelho de
-vtable corrige a leitura cruzada de tipos → observador registra as resoluções.
+Running this **does not touch the game nor any of your MODs** — nothing here is
+copied to the RDR2 directory, no file from this package touches the game.
+`mock_game.exe` loads only the three fake DLLs from this folder and exercises the
+full chain: provider spoof → the "Mor3a" gate accepts → the vtable mirror
+fixes the cross-type read → the observer records the resolutions.
 
-## Como rodar
+## How to run
 
-1. Dê duas cliques em `run_selftest.bat` (ou rode no cmd desta pasta).
-2. Espere a linha final: `SELFTEST: PASS` ou `SELFTEST: FAIL`.
+1. Double-click `run_selftest.bat` (or run it in cmd from this folder).
+2. Wait for the final line: `SELFTEST: PASS` or `SELFTEST: FAIL`.
 
-É preciso ter o Visual C++ redistributable? **Não** — os binários são
-estáticos. Windows 10/11 x64 basta.
+Do you need the Visual C++ redistributable? **No** — the binaries are
+static. Windows 10/11 x64 is enough.
 
-## Arquivos
+## Files
 
-| Arquivo | Papel |
+| File | Role |
 |---|---|
-| `mock_game.exe` | simula o loader NGX do RDR2 (RAGE) |
-| `mock_optiscaler.dll` | simula a superfície NGX do OptiScaler (inclusive o "falso carregar" do handle) |
-| `mock_mor3a.dll` | simula o gate do RDR2VulkanFG (whitelist nvngx.dll) |
-| `zz_ngxbridge.asi` | a ponte (o mesmo binário que vai para o jogo) |
-| `zz_ngxbridge.ini` | configuração apontando para os mocks |
-| `run_selftest.bat` | executa e verifica as 5 condições |
+| `mock_game.exe` | simulates the RDR2 (RAGE) NGX loader |
+| `mock_optiscaler.dll` | simulates OptiScaler's NGX surface (including the handle's "fake load") |
+| `mock_mor3a.dll` | simulates the RDR2VulkanFG gate (nvngx.dll whitelist) |
+| `zz_ngxbridge.asi` | the bridge (the same binary that goes into the game) |
+| `zz_ngxbridge.ini` | configuration pointing at the mocks |
+| `run_selftest.bat` | runs and checks the 5 conditions |
 
-Se der `FAIL`, rode no cmd nesta pasta e mande o conteúdo de `stdout.log` e
-de `RDR2VulkanFG\ngxbridge.log`.
+If you get `FAIL`, run in cmd from this folder and send the contents of `stdout.log` and
+of `RDR2VulkanFG\ngxbridge.log`.

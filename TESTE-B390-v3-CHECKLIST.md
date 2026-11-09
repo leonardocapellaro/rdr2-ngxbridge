@@ -1,104 +1,104 @@
-# Teste na B390 — pacote v3 (marca no log: `hudfield-v3`)
+# B390 test — v3 package (log marker: `hudfield-v3`)
 
-## Antes de tudo (1x só, jogo fechado)
+## Before anything else (only once, game closed)
 
-1. No PC da B390, baixe o zip do release:
+1. On the B390 PC, download the release zip:
    https://github.com/leonardocapellaro/RDR2-Vulkan-FG/releases/tag/v0.82-hudfield-v3
-   Extraia em qualquer pasta (ex.: `Downloads\hudfield-v3`).
-2. Na pasta do jogo: renomeie `RDR2VulkanFG.asi` → `RDR2VulkanFG.asi.v2.bak`.
-3. Copie o `RDR2VulkanFG.asi` do pacote pra pasta do jogo. O
-   `RDR2VulkanFGDiagnostics.dll` do pacote vai na subpasta `RDR2VulkanFG\` da pasta do jogo.
-4. Abra `RDR2VulkanFG.ini` (mesma pasta do `.asi`) e deixe o bloco do teste BASELINE (abaixo).
+   Extract it to any folder (e.g. `Downloads\hudfield-v3`).
+2. In the game folder: rename `RDR2VulkanFG.asi` → `RDR2VulkanFG.asi.v2.bak`.
+3. Copy the package's `RDR2VulkanFG.asi` into the game folder. The
+   package's `RDR2VulkanFGDiagnostics.dll` goes in the game folder's `RDR2VulkanFG\` subfolder.
+4. Open `RDR2VulkanFG.ini` (same folder as the `.asi`) and leave the BASELINE test block (below).
 
-Caminho do log, sempre: `<pasta do jogo>\RDR2VulkanFG.log`. Toda sessão começa com a linha
-`... RDR2 Vulkan FG 0.82+hudfield-v3 ...` — se não aparecer, o `.asi` novo não está em uso.
+Log path, always: `<game folder>\RDR2VulkanFG.log`. Every session starts with the line
+`... RDR2 Vulkan FG 0.82+hudfield-v3 ...` — if it doesn't appear, the new `.asi` is not in use.
 
-## Como rodar cada teste (repetir os 4 passos)
+## How to run each test (repeat the 4 steps)
 
-- Jogo aberto, personagem no mundo (não em menu principal). 2–3 min de gameplay.
-- Faça a ROTEIRA do teste (abaixo de cada um).
-- Feche o jogo. Na pasta extraída, dê dois cliques em `collect-once.bat`.
-- Renomeie o zip gerado com a etiqueta do teste: `coleta-BASE.zip`, `coleta-MODE1.zip`, `coleta-COMP0.zip`.
+- Game open, character in the world (not in the main menu). 2–3 min of gameplay.
+- Do the ROUTE for the test (below each one).
+- Close the game. In the extracted folder, double-click `collect-once.bat`.
+- Rename the generated zip with the test label: `coleta-BASE.zip`, `coleta-MODE1.zip`, `coleta-COMP0.zip`.
 
-Depois, me mande os zips (ou o caminho).
+Then send me the zips (or the path).
 
 ---
 
-## TESTE 1 — BASELINE (mesmo setting de 07/11, só pra confirmar a v3)
+## TEST 1 — BASELINE (same setting as 2026-11-07, just to confirm the v3)
 
-No INI, seção `[fgvk]`:
+In the INI, section `[fgvk]`:
 ```ini
 FGProvider=XeSS
 DebugLogging=1
 ```
-(apague/comente `XeSSUiMode` e `XeSSUiComposition` se existirem; `CapturePresentTransfers` não é necessário)
+(delete/comment out `XeSSUiMode` and `XeSSUiComposition` if they exist; `CapturePresentTransfers` is not needed)
 
-Roteira:
-1. Ande pelo mundo. Deve dar ~2x os fps "reais" (como antes: ~36→~72).
-2. Abra o menu do MOD com a tecla `-` do NUMERICO. No log deve aparecer `menu: open`.
-   - Se abriu: teste trocar o Multiplier pra 4x e veja os fps dobrarem de novo (~144).
-   - Se NÃO abriu: abra o jogo de novo? NÃO — siga o TESTE 4 (diagnóstico de input).
-3. Abra a roda de armas e a roda de itens. Deve PISCAR (é o problema conhecido — confirme e pronto).
-4. Procure no log a linha: `virtual swapchain: ... uiMode=4 uiComposition=1`.
+Route:
+1. Walk around the world. It should give ~2x the "real" fps (as before: ~36→~72).
+2. Open the MOD menu with the keypad `-` key. The log should show `menu: open`.
+   - If it opened: test switching the Multiplier to 4x and watch the fps double again (~144).
+   - If it did NOT open: reopen the game? NO — go to TEST 4 (input diagnostics).
+3. Open the weapon wheel and the item wheel. They should FLICKER (that's the known problem — confirm and that's it).
+4. Look in the log for the line: `virtual swapchain: ... uiMode=4 uiComposition=1`.
 
-Resultado esperado: funciona como na sessão passada, roda pisca, e o log mostra `uiMode=4 uiComposition=1`.
+Expected result: works like the last session, the wheel flickers, and the log shows `uiMode=4 uiComposition=1`.
 
-## TESTE 2 — `XeSSUiMode=1` (o teste importante)
+## TEST 2 — `XeSSUiMode=1` (the important test)
 
-Mesmo INI + uma linha:
+Same INI + one line:
 ```ini
 XeSSUiMode=1
 ```
 
-Roteira: mesma (roda de armas/itens é o foco; repare principalmente na RODA DE ITENS).
+Route: same (the weapon/item wheel is the focus; pay attention mainly to the ITEM WHEEL).
 
-O que os resultados SIGNIFICAM (me diga qual aconteceu):
-- **(a) A roda parou de piscar, mas embaça/derrete quando você gira ou ela anima**
-  → o culpado é a "extração da UI por diferença" do modo 4. Vitória parcial: abre o
-    caminho do modo 5 (sintetizar a UI), que é o fix de verdade. É o mais provável.
-- **(b) A roda continua piscando do mesmo jeito**
-  → o flicker não vem só da extração; vou investigar o caminho do HUD com OptiScaler.
-- **(c) O mundo/objetos começaram a borrar ou deixar rastro (ghosting)** — a roda pode
-  até parar, mas ficou pior
-  → o modo 1 manda o HUD pela IA de interpolação, que é a fraqueza documentada da
-    Intel. Não é pra deixar ligado; só mede a direção.
-- No log confirme `uiMode=1` (se aparecer `uiMode=4`, o INI não foi lido).
+What the results MEAN (tell me which one happened):
+- **(a) The wheel stopped flickering, but blurs/melts when you rotate it or it animates**
+  → the culprit is mode 4's "UI extraction by difference". Partial win: it opens the
+    path of mode 5 (synthesizing the UI), which is the real fix. It's the most likely one.
+- **(b) The wheel keeps flickering the same way**
+  → the flicker doesn't come only from the extraction; I'll investigate the HUD path with OptiScaler.
+- **(c) The world/objects started smearing or leaving trails (ghosting)** — the wheel may
+  even stop, but it got worse
+  → mode 1 sends the HUD through the interpolation AI, which is Intel's documented
+    weakness. Not to be left on; it only measures the direction.
+- Confirm `uiMode=1` in the log (if `uiMode=4` shows up, the INI wasn't read).
 
-## TESTE 3 — `XeSSUiComposition=0` (esperado PIOR — só confirmar a direção)
+## TEST 3 — `XeSSUiComposition=0` (expected WORSE — just confirming the direction)
 
-Mesmo INI do baseline, SEM a linha `XeSSUiMode`, com:
+Same baseline INI, WITHOUT the `XeSSUiMode` line, with:
 ```ini
 XeSSUiComposition=0
 ```
 
-Roteira: 30–60 s de gameplay + roda.
+Route: 30–60 s of gameplay + wheel.
 
-Resultado esperado: PIOR que baseline (o HUD tende a sumir/emagrecer nos frames
-gerados, piscando feio). Se piorar mesmo: ótimo, confirma que a composição ligada é o
-que está segurando o HUD hoje. **Desligue essa chave e volte ao baseline logo.**
+Expected result: WORSE than baseline (the HUD tends to disappear/thin out in the generated
+frames, flickering badly). If it really gets worse: great, that confirms that composition being
+on is what is holding the HUD up today. **Turn this key off and go back to baseline right away.**
 
-## TESTE 4 — Diagnóstico do MENU (roda junto com o TESTE 1, se o menu não abrir)
+## TEST 4 — MENU diagnostics (run together with TEST 1, if the menu doesn't open)
 
-Com o jogo em primeiro plano:
-1. Aperte `-` do NUMERICO. (É a tecla do menu, `MenuKey=0x2D`.)
-2. Não abriu? Clique 1x em qualquer lugar DENTRO da janela do jogo e aperte de novo.
-3. Não abriu? `Alt+Tab` pra fora do jogo e `Alt+Tab` de volta, aperte de novo.
-4. Não abriu? Aperte `End` e depois `*` do NUMERICO (são hotkeys — o `*` liga/desliga o FG;
-   os fps devem cair/dobrar com ele).
+With the game in the foreground:
+1. Press the keypad `-`. (That's the menu key, `MenuKey=0x2D`.)
+2. Didn't open? Click once anywhere INSIDE the game window and press it again.
+3. Didn't open? `Alt+Tab` out of the game and `Alt+Tab` back, press it again.
+4. Didn't open? Press `End` and then the keypad `*` (these are hotkeys — the `*` toggles FG on/off;
+   the fps should drop/double with it).
 
-Depois, no log, me diga quais destas linhas existem:
-- `menu: open` → menu abriu (use o menu pra trocar o multiplicador)
-- `menu input: left click observed` → clique chega no jogo (problema é só o menu)
-- `hotkey: ... ignored — foreground` → tecla chegou, jogo não estava focado
-- nada disso → o input não chega nem perto; é aqui que eu vou consertar no fork
+Then, in the log, tell me which of these lines exist:
+- `menu: open` → the menu opened (use the menu to switch the multiplier)
+- `menu input: left click observed` → clicks reach the game (the problem is only the menu)
+- `hotkey: ... ignored — foreground` → the key arrived, the game was not focused
+- none of these → the input doesn't even come close; this is where I'll fix it in the fork
 
-## Sem o menu (alternativa do multiplicador, se necessário)
+## Without the menu (multiplier alternative, if needed)
 
-Com o jogo fechado, no INI: `DLSSGFrames=1` = x2, `2` = x3, `3` = x4. Reinicie o jogo a
-cada mudança e confirme nos fps e na linha de telemetria do log.
+With the game closed, in the INI: `DLSSGFrames=1` = x2, `2` = x3, `3` = x4. Restart the game on
+every change and confirm in the fps and in the log's telemetry line.
 
-## Regras
+## Rules
 
-- Uma variável por sessão. Nunca troque provider pra DLSS-G na sessão (trava).
-- Não apague os `.bak` (beta e v2) — são o rollback.
-- Sessão de uso normal depois dos testes: `DebugLogging=0` (economiza um tiquinho de fps).
+- One variable per session. Never switch the provider to DLSS-G during the session (it locks up).
+- Don't delete the `.bak` files (beta and v2) — they are the rollback.
+- Normal-use session after the tests: `DebugLogging=0` (saves a tiny bit of fps).
