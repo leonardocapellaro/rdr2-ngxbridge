@@ -124,29 +124,27 @@ Same as TEST 5 plus `XeSSSynthSmooth=0`. If THIS flickers and TEST 5 did not,
 smoothing is proven as the working mechanism. Skip if TEST 5 was a clear win or
 clear fail. Send: `coleta-MODE3NOSMOOTH.zip`.
 
-## TEST 5c — ANSWERED 09/11 (12:10 session): everything went magenta
+## TEST 5c — ANSWERED 09/11 (corrected): the UI blinks MAGENTA ↔ WHITE
 
-Our synthetic texture IS composited by the SDK in mode 3. The magenta covering
-EVERYTHING (not just the UI) says our diff layer contains far more than UI —
-the working hypothesis is the two snapshots (backbuffer vs HUD-less) being out
-of step while the world moves. TEST 5c no longer needs running; 5d does.
+With tint in mode 3, the wheel/minimap blink between magenta and white.
+Meaning: our layer IS composited (magenta is ours), it IS UI-localized
+(good), and the white is the game's real UI on the real frames — so mode 3's
+flicker has always been the mismatch between the real UI and our estimated
+UI, frame-alternating. TEST 5c no longer needs running; 5d characterizes it.
 
-## TEST 5d — MAGENTA: STILL VS PAN (decides misalignment vs bad estimate)
+## TEST 5d — CHARACTERIZE THE MISMATCH (tint stays on)
 
-Same INI as TEST 5 (`XeSSSynthUI=1 XeSSUiMode=3`) PLUS `XeSSSynthDebugTint=1`.
-ROUTE: FG on → weapon wheel open →
-1. **hold the camera completely still 15 s** — describe: does the magenta
-   recede to just the UI elements (wheel/HUD), or does the world stay magenta?
-2. then **pan/rotate slowly 15 s** — does the world light up magenta again?
+Same INI as TEST 5 (`XeSSSynthUI=1 XeSSUiMode=3 XeSSSynthDebugTint=1`).
+ROUTE (one session, in order):
+1. FG ON, wheel open ~15 s: confirm magenta/white alternation on the UI.
+   Note anything magenta that ISN'T UI, or UI that never turns magenta.
+2. **FG OFF** via the hotkey (numpad `*`) with the wheel still open ~15 s:
+   everything should be pure white/real — the blinking must STOP. If it does
+   not, something else composites too and that goes in the log for us.
+3. FG ON again, then open/close the wheel 3 times quickly: does the magenta
+   appear with a delay or leave ghosts when the UI vanishes? (EMA ~2–3 frames)
 
-Verdict:
-- Magenta UI-only when still, world magenta when moving → the two input
-  snapshots are time-misaligned; the layer itself can be made clean (fix =
-  alignment/pairing, not the alpha math).
-- Magenta everywhere even when still → the estimate (or snapshot content) is
-  fundamentally wrong in motion-less frames too; deeper rework.
-
-Send: `coleta-TINTSTILL.zip`
+Send: `coleta-TINTMISMATCH.zip`
 
 ## TEST 6 — x3 DIAGNOSTICS RUN (expect x2 displayed; the LINES are the point)
 
@@ -165,10 +163,12 @@ Send: `coleta-X3DIAG.zip`
 
 ## What each answer unlocks
 
-- TEST 5d UI-only magenta when still → snapshot alignment fix next; mode 3
-  becomes genuinely promising after it.
-- TEST 5d magenta everywhere even still → the synthetic layer concept needs
-  rework (or `XeSSSynthUI` stays off); mode 1 remains the recommendation.
+- TEST 5d blinking STOPS with FG off → real-vs-synthetic UI mismatch
+  confirmed; the next commit replaces the `max delta ×2` alpha estimate with
+  a proper per-pixel unmix and we finally chase mode 3 for real.
+- TEST 5d magenta on non-UI areas, UI never magenta, or blinking continues
+  with FG off → different compositing story than assumed; the zip's log +
+  your description decides what that means.
 - TEST 6 reject-detail `flagsSoftware=0` (or another mismatch) → we know the
   presenter mode the field SDK actually uses; the pacer gets a verified
   contract for it (or a documented "cannot bind on this SDK" statement).

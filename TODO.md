@@ -51,16 +51,18 @@ single 1-minute gameplay capture answer the question by itself.
       mode 1. Two irreducible possibilities remain — the composite may ignore
       our tagged texture entirely, or the alpha estimate is bad — and no
       further estimator work is worth it before knowing which.
-- [x] TESTE 5c ANSWERED 09/11 (v4.4 tint session): the whole game went
-      MAGENTA in mode 3 → the SDK composites our texture. New sharper fact:
-      the layer covers everything, not just UI — hypothesis: the HUD-less
-      snapshot and the backbuffer are time-misaligned under camera motion, so
-      the diff contains the moving world. The estimator question is on hold
-      until alignment is excluded.
-- [ ] TESTE 5d (next session): wheel open, camera dead-still 15 s vs pan 15 s
-      with tint on. UI-only magenta when still → fix snapshot alignment/
-      pairing; magenta even still → rework the layer concept (or keep
-      XeSSSynthUI off and mode 1 as the recommendation).
+- [x] TESTE 5c ANSWERED 09/11 (v4.4 tint session, user-corrected): the UI
+      elements (wheel/minimap) blink MAGENTA ↔ WHITE in mode 3. SDK composites
+      our texture AND the layer is UI-localized. Flicker = real UI (white, on
+      real frames) alternating with synthetic UI (magenta, on generated
+      frames) — a coverage/edges mismatch problem, not noise, not alignment
+      (that hypothesis died with the correction).
+- [ ] TESTE 5d (next session): FG-off ablation (numpad `*`) with the wheel
+      open — blinking must stop (pure white) to confirm the real-vs-generated
+      read; plus quick open/close x3 for ghosting (EMA ramp).
+- [ ] Next code step after 5d confirms: replace the `max channel delta ×2`
+      alpha heuristic with a per-pixel unmix of `B = a·U + (1−a)·C`
+      (clamped normalized luminance-delta estimate), keep EMA on top.
 - [ ] Optional: UI coverage/alpha stats via small readback so a future log
       proves the layer's content quality without eyes-on.
 

@@ -117,12 +117,17 @@ and INI alike. Logs:
 Sessions 12:02 (mode 1, x3 INI + menu to x4 live) and 12:10 (mode 3 + tint), both
 v4.4 (`createdInterp=3` present):
 
-- **Decisive tint test: MAGENTA EVERYWHERE** (user report + `tint=1` in log). The
-  SDK composites our synthetic UI texture in mode 3. The layer is consumed; the
-  estimator question is replaced by a sharper one: why does the layer cover the
-  whole screen? Working hypothesis: HUD-less snapshot and backbuffer are
-  time-misaligned during camera motion, so `B−(1−a)·C` diffs the moving world,
-  not just UI. TESTE 5d (wheel + camera dead-still vs pan) separates the two.
+- **Decisive tint test: the UI elements blink MAGENTA ↔ WHITE** (user report +
+  `tint=1` in log). The SDK composites our synthetic UI texture in mode 3.
+  *Correction the same evening:* the first reading said "magenta everywhere"
+  — the user clarified it was ONLY the wheel/minimap blinking magenta↔white.
+  That kills the whole-screen/snapshot-misalignment hypothesis and replaces it
+  with a better story: real frames carry the game's actual UI (white),
+  generated frames carry our composited synthetic UI (magenta); mode 3's
+  flicker is the per-frame mismatch between the two, and our layer is
+  UI-localized (the estimator finds real UI). TESTE 5d rewritten around it:
+  FG-off ablation (numpad `*`) — blinking must stop → mismatch confirmed;
+  then the estimator gets a proper per-pixel alpha unmix.
 - **x3 status: our side is now provably correct** — `interpolation target set: x3`
   at attach and `x4` at 12:07:59 (the menu path WORKS now), `SetInterpolatedFrames`
   succeeds, yet `displayed=2` for the whole enabled stretch and the telemetry

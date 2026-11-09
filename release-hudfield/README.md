@@ -19,18 +19,25 @@ also proved the fork's synthetic-UI pipeline runs end-to-end on the card
 Your 09/11 noon session ran v4.4 (x3 INI + tint + menu) and solved one question
 and narrowed the other:
 
-**SOLVED — the synthetic UI texture IS used.** With `XeSSSynthDebugTint=1` the
-game went **magenta** in mode 3. The SDK composites our layer, so the mode-3
-flicker can only come from what we paint into it. "Everything" magenta (not
-just the wheel) is the extra clue: our `B − (1−a)·C` diff fires over the whole
-screen, i.e. the HUD-less and backbuffer inputs differ almost everywhere
-(most likely a timing/misalignment between the two snapshots during motion,
-not just real UI). Next battle: make that layer contain only UI — TESTE 5d in
-the checklist distinguishes misalignment from estimation (hold the camera
-still with the wheel open: if magenta shrinks to the UI, the two snapshots are
-out of step while the world moves; if it stays everywhere, the estimate itself
-is wrong). Nothing about this is "fixed" in v4.5 — tint stays available and
-off by default; mode 1 remains the recommended default.
+**SOLVED — the synthetic UI texture IS used** (and your 09/11 correction made
+it even better news than first read). With `XeSSSynthDebugTint=1` in mode 3,
+**the UI elements themselves** (weapon wheel, minimap) blink **magenta ↔
+white**, not the whole screen. Two conclusions:
+1. Our layer is **UI-localized** — the estimator finds real UI and nothing
+   else. The earlier "whole-screen" reading was wrong and the snapshot
+   misalignment hypothesis died with it.
+2. The blink pattern is **the game's real UI (white, on real frames)
+   alternating with our composited synthetic UI (magenta, on generated
+   frames)** — mode 3's flicker was never capture noise: it is the mismatch
+   between what the game actually draws and what our estimate produces, per
+   alternating frame. Which makes the UI estimate's coverage the one battle
+   worth fighting (and TESTE 5d measures it: FG off via numpad `*` should
+   make ALL blinking stop — white only; on = magenta/white alternating).
+
+Nothing is "fixed" by this — tint stays available and off by default; mode 1
+remains the recommended default. But the next code step is now clearly aimed:
+make the synthetic UI match the real one in coverage/edges (proper per-pixel
+alpha unmix instead of `max channel delta ×2`).
 
 **OPEN — why 3x never displays.** Our side is now provably correct:
 `createdInterp=3` (creation ceiling fixed), the menu works live
@@ -194,7 +201,7 @@ grabs ALL rotated logs, and only the last session lands in a zip if you skip it.
 | `XeSSSynthUI=1` + `XeSSUiMode=3` + `XeSSSynthSmooth=0` | ablation row: same as above without temporal smoothing. If THIS flickers and the row above does not, smoothing is what fixes it — keep it |
 | `XeSSSynthUI=1` + `XeSSUiMode=5` | kept for reference: on 08/11 night it flickered **with FG proven on** (extraction refinement on top); expect no better than mode 3 |
 | `DLSSGFrames=2` (+ anything above) | **TESTE 6, v4.5 diagnostics run**: `interp=2` vs `displayed=2` separates our side from the SDK's; the new `reject detail` and `SDK batch observed unbound` lines tell us why x3 clamps. Expect it to still display x2 — that is data, not failure |
-| `XeSSSynthUI=1` + `XeSSUiMode=3` + `XeSSSynthDebugTint=1` | **TESTE 5d** (5c already answered: it went magenta = consumed): with the wheel open, hold the camera DEAD still for 15 s, then pan 15 s. Does the magenta shrink to UI elements when still, or stay everywhere? That picks the next fix (snapshot alignment vs alpha estimate) |
+| `XeSSSynthUI=1` + `XeSSUiMode=3` + `XeSSSynthDebugTint=1` | **TESTE 5d** (5c already answered: the UI blinks magenta↔white = consumed, per-frame mismatch): wheel open, then **FG off via numpad `*`** — the blinking must stop (pure white). Characterizes what the next estimator rewrite has to match |
 | `XeSSUiComposition=0` | only meaningful with modes 2–5 (mode 1 already has composition off); expected WORSE — HUD vanishes from generated frames; revert immediately |
 
 Rules: one variable per session; verify the creation line
