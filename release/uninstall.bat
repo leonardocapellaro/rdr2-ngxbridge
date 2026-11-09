@@ -1,10 +1,10 @@
 @echo off
 rem ============================================================
-rem  zz_ngxbridge uninstall - remove apenas os arquivos desta ponte.
-rem  Se havia versoes anteriores de zz_ngxbridge.* (backup feito pelo
-rem  install.bat), a mais recente delas e restaurada.
-rem  Uso: uninstall.bat   (na pasta do jogo)
-rem       uninstall.bat "D:\caminho\para\pasta\do\RDR2"
+rem  zz_ngxbridge uninstall - removes only this bridge's files.
+rem  If previous zz_ngxbridge.* versions existed (backed up by
+rem  install.bat), the most recent one is restored.
+rem  Usage: uninstall.bat   (in the game folder)
+rem         uninstall.bat "D:\path\to\the\RDR2\folder"
 rem ============================================================
 setlocal
 set "GAMEDIR=%~dp0"
@@ -13,26 +13,26 @@ if "%GAMEDIR:~-1%"=="\" set "GAMEDIR=%GAMEDIR:~0,-1%"
 
 if exist "%GAMEDIR%\zz_ngxbridge.asi" goto :remove
 if exist "%GAMEDIR%\zz_ngxbridge.ini" goto :remove
-echo Nada para remover em %GAMEDIR% (nenhum arquivo zz_ngxbridge encontrado).
+echo Nothing to remove in %GAMEDIR% (no zz_ngxbridge files found).
 exit /b 0
 
 :remove
 del /q "%GAMEDIR%\zz_ngxbridge.asi" 2>nul
 del /q "%GAMEDIR%\zz_ngxbridge.ini"  2>nul
-echo [OK] zz_ngxbridge.asi e zz_ngxbridge.ini removidos de %GAMEDIR%
+echo [OK] zz_ngxbridge.asi and zz_ngxbridge.ini removed from %GAMEDIR%
 
 if not exist "%GAMEDIR%\zz_ngxbridge_backup" goto :done
-rem restaurar o conteudo do backup mais recente (nome mais recente = ultimo no listing)
+rem restore the newest backup's contents (newest name = first in the listing)
 for /f "delims=" %%D in ('dir /b /ad /o-n "%GAMEDIR%\zz_ngxbridge_backup"') do (
     for %%F in (zz_ngxbridge.asi zz_ngxbridge.ini) do (
         if exist "%GAMEDIR%\zz_ngxbridge_backup\%%D\%%F" (
             copy /y "%GAMEDIR%\zz_ngxbridge_backup\%%D\%%F" "%GAMEDIR%\%%F" >nul
-            echo [RESTORE] %%F restaurado de %%D
+            echo [RESTORE] %%F restored from %%D
         )
     )
     goto :done
 )
 :done
-echo Nada mais foi alterado: OptiScaler, RDR2VulkanFG, OptiPatcher, loader
-echo e RDR2.exe nunca sao tocados por estes scripts.
+echo Nothing else was touched: OptiScaler, RDR2VulkanFG, OptiPatcher, the
+echo loader and RDR2.exe are never modified by these scripts.
 exit /b 0
