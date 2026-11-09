@@ -4,22 +4,31 @@ Priorities after the 2026-11-08 field session (see FIELD-B390-5.md). No more
 "run-a-test-send-back" cycles: every change ships with log lines that make a
 single 1-minute gameplay capture answer the question by itself.
 
-## P0 — HUD-less snapshot stall (the real defect) — FIXED IN v4.2, FIELD VALIDATION OPEN
+## P0 — HUD-less snapshot stall (the real defect) — FIXED IN v4.2, FIELD VALIDATED 08/11 NIGHT
 - [x] Epoch race fixed (capture stamped at record time) + subpass-marking
       consistency in v4.2, with the never-stale-frame rule intact.
 - [x] Always-on forensics shipped in v4.2: `XeSS eligibility:` flips,
       `HUD-less miss start/end` + `lastReject` code (visible with DebugLogging=0).
-- [ ] Confirm in the next B390 session: FG uptime should approach 100% in-world;
-      08/11 evidence says the stall was 15 s of never-matching capture after
-      world start — watch `lastReject=` values if any miss lines remain
-      (5=loadOp / 6=UNDEFINED layout would mean matcher strictness by design).
+- [x] 08/11 night confirmed: `hook live` → first `eligible=1` in ~1.0 s
+      (was ~15 s); user independently felt it ("bem mais rápido"). Remaining
+      misses: transient `lastReject=5` at boot (78 ms) and `lastReject=2`
+      (extent) exactly when the weapon wheel opens — by-design refusal.
+- [ ] Open: if wheel-open misses bother gameplay further, investigate the
+      extent-change variant matcher (do NOT relax the never-stale gate).
 
-## P1 — Menu multiplier dead on keys — FIXED IN v4.2, FIELD VALIDATION OPEN
-- [x] Toggle un-gated from renderer init, GetAsyncKeyState poll backstop with
-      500 ms dedup, always-on proof line per press (queue or poll path).
-- [ ] Next session: F9 must print either the queue line or the poll line; if it
-      still does not open the overlay, the proof line localizes the failure.
-- [ ] Workaround still documented: INI `DLSSGFrames=2` (3x) / `3` (4x).
+## P1 — Menu multiplier dead — TWO REAL BUGS FOUND 08/11 NIGHT, FIXED IN v4.4
+- [x] v4.2 proof lines worked exactly as designed: the logs caught the failure
+      itself — poll toggles open, the SAME press through the game queue 9 ms
+      later toggles close (one-way dedup). Fixed v4.4: 500 ms guard in BOTH
+      paths; every line prints `dedup=`.
+- [x] Root cause of "multiplier does nothing at any value": swapchain was
+      created with `maxInterpolatedFrames=1` hardcoded. INI parsing was fine
+      all along (`DLSSGFrames=2 (x3)` in config line, `displayed` histogram
+      maxed at 2 all session). Fixed v4.4: create at `sdk.MaxInterpolations()`
+      (card reports 3 → x4 possible), log `createdInterp=` and
+      `XeSS interpolation target set:`.
+- [ ] Next session (v4.4): TESTE 2 menu stays open + switches live; TESTE 3
+      INI x3 must show `createdInterp=3` + `displayed=3`.
 
 ## P2 — Synthetic UI (XeSSSynthUI) validation — ITERATION 2 IN v4.3
 - [x] v4.1 executed the pipeline end-to-end on hardware (armed + first-frame,
@@ -29,13 +38,16 @@ single 1-minute gameplay capture answer the question by itself.
       insufficient — it re-derives the same extraction the SDK does.
 - [x] EMA smoothing shipped in v4.3 (`XeSSSynthSmooth`, 0–100, default 35;
       accumulator resets with provider history; log shows `smoothing=1`).
-- [ ] NEXT FIELD RUN: TESTE 5 = mode 3 (no extraction at all) + smoothing;
-      TESTE 5b = ablation with smoothing off. Judge only inside long
-      `eligible=1` stretches. Outcomes:
-      mode 3 clean → new default candidate + ship guidance;
-      mode 3 clean but 5b flickers → smoothing proven as the mechanism;
-      mode 3 still flickers → the alpha estimate itself is the limiter →
-      next step is a better estimator (multi-channel least squares, edge-aware).
+- [x] 08/11 night: TESTE 5 re-run VALID (≈105 s continuous enabled window):
+      mode 3 + EMA smoothing STILL FLICKERS the wheel. Fork default stays
+      mode 1. Two irreducible possibilities remain — the composite may ignore
+      our tagged texture entirely, or the alpha estimate is bad — and no
+      further estimator work is worth it before knowing which.
+- [x] v4.4 ships the decisive experiment: `XeSSSynthDebugTint=1` paints the
+      layer premultiplied magenta. Mode 3 + tint=1, FG-on frames: magenta
+      wheel → consumed (fix the estimator: multi-channel least squares /
+      edge-aware); normal-color wheel → ignored upstream (fix the wiring).
+- [ ] Next session: TESTE 5c (tint). Its answer picks the next code change.
 - [ ] Optional: UI coverage/alpha stats via small readback so a future log
       proves the layer's content quality without eyes-on.
 

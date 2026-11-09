@@ -1,4 +1,4 @@
-# B390 field test — package v4.3 (log tag: `hudfield-v4.3`)
+# B390 field test — package v4.4 (log tag: `hudfield-v4.4`)
 
 Run ONE config per game session. After EVERY session: close the game, then
 double-click `collect-once.bat` (it grabs ALL logs now — if you only run it at
@@ -9,14 +9,14 @@ the end, only the last session ever lands in a zip).
 1. On the B390 PC, download the zip from the release:
    https://github.com/leonardocapellaro/RDR2-Vulkan-FG/releases/latest
    Extract anywhere (e.g. `Downloads\hudfield`).
-2. In the game folder: rename `RDR2VulkanFG.asi` → `RDR2VulkanFG.asi.v42.bak`.
+2. In the game folder: rename `RDR2VulkanFG.asi` → `RDR2VulkanFG.asi.v43.bak`.
 3. Copy the package's `RDR2VulkanFG.asi` into the game folder; the
    `RDR2VulkanFGDiagnostics.dll` goes into the game folder's `RDR2VulkanFG\` subfolder.
 4. Open `RDR2VulkanFG.ini` (next to the `.asi`) and make sure the TEST 1 block
    below is in place (it is basically the old baseline minus the v5 knobs).
 
 Log path, always: `<game folder>\RDR2VulkanFG.log`. Every session starts with
-`... RDR2 Vulkan FG 0.82+hudfield-v4.3 ...` — if that line is missing, the new
+`... RDR2 Vulkan FG 0.82+hudfield-v4.4 ...` — if that line is missing, the new
 `.asi` is not the one running.
 
 ## How to run each test (repeat for every test)
@@ -51,28 +51,35 @@ Then answer:
 
 Send: `coleta-BASE.zip`
 
-## TEST 2 — MENU + MULTIPLIER (should finally work)
+## TEST 2 — MENU + MULTIPLIER (v4.4: the self-close bug is fixed)
 
 Keep the same INI as TEST 1.
 ROUTE: in-world, press the MenuKey (in your INI: `MenuKey=0x78` = **F9**).
-- a) Search the log for `menu: open` — plus one proof line: either
-  `menu input: menu key F9 observed in game queue` or
-  `hotkey: menu key F9 seen by present-loop poll`. With v4.2 a press CANNOT
-  be silent anymore.
-- b) If the overlay opens: switch Multiplier to 4x, watch ShowFPS
-  (`displayed` goes toward 4×). If it does not open: send the log anyway — the
-  proof line tells us where the key died.
+- a) Search the log for `menu: open`. On v4.2/v4.3 the menu opened and a second
+  later the same physical press re-entered through the game's queue and closed
+  it again (`menu: open` immediately followed by `menu: close`, ~9 ms apart).
+  With v4.4 that must NOT happen — one press = one toggle, and every key line
+  now carries `dedup=0/1`. Press once to open, again to close: you should see
+  exactly one open and one close.
+- b) With the overlay open (it should STAY open now): switch Multiplier to 4x,
+  watch ShowFPS (`displayed` goes toward 4×, and the log prints
+  `XeSS interpolation target set: x4 ...`). If it does not open: send the log
+  anyway — the proof line tells us where the key died.
 - c) FG toggle hotkey note: per INI, `KeyToggleFG=0x6A` is **numpad `***` (not
   F6), and `KeyCycleFrames=0x23` is **End** (not Tab) — the labels in some older
   notes were wrong.
 
 Send: `coleta-MENU.zip`
 
-## TEST 3 — MULTIPLIER VIA INI (fallback if TEST 2 fails)
+## TEST 3 — MULTIPLIER VIA INI (v4.4: this is now REAL, was silently capped at x2)
 
-Game closed, INI `DLSSGFrames=2` → play 2 min → `collect-once.bat` →
-`coleta-3X.zip`. Expect ~3× displayed fps; FG on ~most of the time per TEST 1's
-method.
+Your 08/11 session proved the old build created the swapchain at 1 interpolated
+frame regardless of INI/menu — `DLSSGFrames=2 (x3)` was read but `displayed` was
+stuck at 2 forever. v4.4 creates the swapchain at the SDK max. Game closed, INI
+`DLSSGFrames=2` → play 2 min → `collect-once.bat` → `coleta-3X.zip`. Verify in
+the log, in order: `createdInterp=3` (creation line), `XeSS interpolation target
+set: x3 ...`, then telemetry `displayed=3`. Expect ~3× displayed fps; FG on
+~most of the time per TEST 1's method.
 
 ## TEST 4 — MODE 4 CONTROL (the flicker reference)
 
@@ -82,11 +89,12 @@ the comparison. Note the `uiMode=4` creation line.
 
 Send: `coleta-MODE4.zip`
 
-## TEST 5 — SYNTHETIC UI + MODE 3 (the v4.3 experiment)
+## TEST 5 — SYNTHETIC UI + MODE 3 (re-run for the record; v4.4 changes nothing here)
 
-v4.2 night proved mode 5 still flickered with FG on — mode 4/5 extract the UI
-from the backbuffer, the known weak spot. **Mode 3 uses no extraction at all**:
-the UI can only come from our synthetic layer, now temporally smoothed.
+The 08/11 night re-run was VALID this time (FG on continuously ~105 s) and the
+wheel still flickered — so re-running TEST 5 only matters if you want a second
+sample. **Do TEST 5c first**: it decides WHICH component is flickering before
+any more estimator work is worth it.
 
 INI add:
 ```ini
@@ -116,14 +124,42 @@ Same as TEST 5 plus `XeSSSynthSmooth=0`. If THIS flickers and TEST 5 did not,
 smoothing is proven as the working mechanism. Skip if TEST 5 was a clear win or
 clear fail. Send: `coleta-MODE3NOSMOOTH.zip`.
 
+## TEST 5c — DECISIVE TINT TEST (run this one; v4.4's key experiment)
+
+Same INI as TEST 5 plus:
+```ini
+XeSSSynthDebugTint=1
+```
+This paints OUR synthetic UI layer solid magenta (log line ends `... tint=1`).
+ROUTE: play until FG is on (`eligible=1`), open the weapon wheel ~15 s.
+
+One question, no nuance: **on the frames where FG is on, is the wheel magenta
+or its normal colors?**
+- **Magenta** → the SDK IS compositing our texture. The flicker can only come
+  from the alpha estimate (its noise survives the tint) → fix = better
+  estimator; smoothing already helps and the tint stays off in normal use.
+- **Normal colors** → our tagged texture is being IGNORED upstream: the wheel
+  you see flickering is the interpolated HUD-less frame, not our layer. No
+  estimator work matters; next step is the wiring/SDK side (tag call, mode-3
+  preconditions).
+- Wheel appears/disappears or shows magenta GHOSTS → still "magenta" answer
+  (consumed), note the artifact separately.
+
+Send: `coleta-TINT.zip`
+
 ---
 
 ## What each answer unlocks
 
-- TEST 1 good + TEST 5 good → mode 3 + smoothing becomes the recommendation;
-  ship default.
-- TEST 1 good + TEST 5 flickers with PROVEN FG uptime → the synthetic estimate
-  itself is the limiter (next step: better alpha); stay on mode 1 default.
-- TEST 2 proof line without `menu: open` → send log; the line localizes the fix.
-- Frequent `HUD-less miss start ... lastReject=5/6` → matcher strictness is the
-  remaining limiter (known; next patch target).
+- TEST 5c MAGENTA wheel → texture is consumed: the estimate is the limiter; next
+  commit improves the alpha estimator (multi-channel least squares / edge-aware)
+  and EMA tuning becomes worth it. Stay on mode 1 default until then.
+- TEST 5c NORMAL-color wheel → the tagged layer is ignored upstream: estimator
+  work is pointless; we go after the tag/mode-3 wiring in the SDK path instead.
+- TEST 2 menu still self-closes (`open`+`close` pair) despite the fix, or the
+  v4.4 multiplier lines are missing → send log; the lines localize it precisely.
+- TEST 3 shows `createdInterp=3` but `displayed=2` still → SDK ignores
+  SetInterpolations; that is an SDK-side answer we currently lack.
+- Frequent `HUD-less miss start ... lastReject=5/6` during normal play → matcher
+  strictness is the remaining limiter (known; next patch target). `lastReject=2`
+  only at the moment the wheel opens is the expected extent-change behavior.

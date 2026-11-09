@@ -1,6 +1,6 @@
-# RDR2 Vulkan FG — build `0.82+hudfield-v4.3` (B390 + OptiScaler)
+# RDR2 Vulkan FG — build `0.82+hudfield-v4.4` (B390 + OptiScaler)
 
-> Look for the tag **`hudfield-v4.3`** on the first lines of `RDR2VulkanFG.log`.
+> Look for the tag **`hudfield-v4.4`** on the first lines of `RDR2VulkanFG.log`.
 > If it does not appear, the old `.asi` is still the one in use.
 
 **What this build is:** the 0.82 base of the original project (public source,
@@ -14,7 +14,42 @@ OptiScaler (~36 real fps → ~72 displayed at 3440x1440). The 2026-11-08 session
 also proved the fork's synthetic-UI pipeline runs end-to-end on the card
 (`armed → first frame` in the log, zero errors).
 
-## What changed in v4.3 (synthetic UI temporal smoothing + mode 3)
+## What changed in v4.4 (multiplier un-ceilinged + menu double-toggle fix + tint experiment)
+
+Your 08/11 night sessions (three configs, logs all self-reporting) found two
+hard bugs and one valid negative:
+
+1. **Multiplier was hard-capped at x2 — you were right.** The SDK swapchain was
+   created with `maxInterpolatedFrames=1` hardcoded, so no INI value or menu
+   setting could ever generate more than one extra frame (your x3 session shows
+   `DLSSGFrames=2 (x3)` read correctly yet `displayed=2` forever). v4.4 creates
+   the swapchain at the SDK maximum (your log proves the SDK supports 3 — up to
+   x4) and the runtime `SetInterpolations` picks the real count. Watch for the
+   new lines: `createdInterp=3` and `XeSS interpolation target set: x3 ...`, and
+   `displayed=3` in telemetry. INI and menu should both work; INI remains the
+   trusted path.
+2. **Menu F9 opened AND instantly re-closed itself (that's why the multiplier
+   menu "didn't work").** Your log: `hotkey: menu key F9 seen by present-loop
+   poll` → `menu: open` → 9 ms later the game's message queue delivered the SAME
+   physical press → `menu: close`. The v4.2 de-duplication only worked in one
+   direction. Fixed; every key line now carries `dedup=`.
+3. **Mode 3 + smoothing verdict is VALID** (FG was continuously on for ~105 s
+   after the ~77 s world-load mark — no confounding this time): the composited
+   wheel still flickered. Before assuming the alpha estimate is at fault, v4.4
+   ships a decisive test: **`XeSSSynthDebugTint=1`** paints our synthetic layer
+   magenta. In mode 3, a **magenta wheel on generated frames = the SDK is
+   compositing our texture** (then the estimate is the limiter, and the fix path
+   is a better alpha estimator). A wheel with **normal** colors = the tagged
+   texture is being ignored upstream (then no estimator work matters, and we go
+   after the wiring/SDK call instead). One session tells us which world we live in.
+
+Also confirmed from your logs: the activation speed fix worked — FG went live
+~1 s after world rendering started (was ~15 s). One residual: right when the
+wheel opens, one `HUD-less miss start ... lastReject=2` (extent) appears — the
+game's wheel variant changes the render extent, the capture correctly refuses to
+stale-match, and FG dips for ~5 s. Known, by-design-safe; noted for the matcher.
+
+## What changed in v4.3 (synthetic UI temporal smoothing + mode 3 — still in this build)
 
 Your 2026-11-08 night report: **mode 5 (`XeSSSynthUI=1` + `XeSSUiMode=5`) still
 flickered the weapon wheel — and this time with FG demonstrably on** (the log
@@ -94,7 +129,7 @@ flips.
 
 ## Installation (one file swap)
 
-1. Game closed. Rename the current `.asi` (v4.1/v4.2) to `RDR2VulkanFG.asi.v42.bak` — rollback.
+1. Game closed. Rename the current `.asi` (v4.1–v4.3) to `RDR2VulkanFG.asi.v43.bak` — rollback.
 2. Copy this `RDR2VulkanFG.asi` into the game folder. The optional collector goes
    to `RDR2VulkanFG\RDR2VulkanFGDiagnostics.dll` (subfolder, as before).
 3. In `RDR2VulkanFG.ini`, keep:
@@ -121,11 +156,13 @@ grabs ALL rotated logs, and only the last session lands in a zip if you skip it.
 | `XeSSSynthUI=1` + `XeSSUiMode=3` | **the primary v4.3 experiment**: no backbuffer extraction at all; wheel comes only from the smoothed synthetic layer. Check `XeSS synthetic UI armed`, `uiMode=3`, `Synthetic UI layer first frame ... smoothing=1` lines — and judge only during long `eligible=1` stretches |
 | `XeSSSynthUI=1` + `XeSSUiMode=3` + `XeSSSynthSmooth=0` | ablation row: same as above without temporal smoothing. If THIS flickers and the row above does not, smoothing is what fixes it — keep it |
 | `XeSSSynthUI=1` + `XeSSUiMode=5` | kept for reference: on 08/11 night it flickered **with FG proven on** (extraction refinement on top); expect no better than mode 3 |
+| `DLSSGFrames=2` (+ anything above) | **v4.4 multiplier check**: log must show `createdInterp=3`, `XeSS interpolation target set: x3`, and telemetry `displayed=3` — on v4.3 this silently stuck at x2 |
+| `XeSSSynthUI=1` + `XeSSUiMode=3` + `XeSSSynthDebugTint=1` | **the decisive v4.4 experiment**: wheel magenta on FG-on frames = our texture IS composited (estimator is the limiter); normal colors = our tag is ignored upstream (wiring is). One session, one answer |
 | `XeSSUiComposition=0` | only meaningful with modes 2–5 (mode 1 already has composition off); expected WORSE — HUD vanishes from generated frames; revert immediately |
 
 Rules: one variable per session; verify the creation line
 `... uiMode=%u uiComposition=%d` in the log matches what you set; the
-`hudfield-v4.3` tag must appear.
+`hudfield-v4.4` tag must appear.
 
 ## Honest notes
 
@@ -149,5 +186,5 @@ Rules: one variable per session; verify the creation line
 
 ## Rollback
 
-Game closed → delete this `.asi` → rename `RDR2VulkanFG.asi.v42.bak` back. The
+Game closed → delete this `.asi` → rename `RDR2VulkanFG.asi.v43.bak` back. The
 `zz_ngxbridge` shim is untouched.

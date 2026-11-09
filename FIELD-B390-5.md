@@ -78,3 +78,36 @@ enabled=1, all at the tail; zero drops after activation). So:
 - Consequence: v4.3 adds EMA smoothing (`XeSSSynthSmooth`, default 35) and makes
   **mode 3** (no extraction at all) the primary experiment, with a smoothing-off
   ablation row. Mode 5 kept only as a reference row.
+## Addendum 2 (2026-11-09) — three v4.3 sessions (23:43 mode 3, 23:48 mode 4, 23:51 mode 1)
+
+User verdicts: activation is now fast (confirmed in logs: `NGX EvaluateFeature
+hook live` +76.6 s → first `eligible=1` +77.6 s — 1.0 s, the v4.2 race fix
+worked; the ~77 s before it is the game's own loading, not the bridge). Only
+mode 1 was flicker-free; modes 3+EMA and 4 flickered. Multiplier dead in menu
+and INI alike. Logs:
+
+- **Mode 3 + EMA verdict is VALID** — `Synthetic UI layer first frame ...
+  smoothing=1` at +70 s and the session ran with FG enabled for long
+  continuous stretches (≈105 s window through the wheel test). So mode 3
+  without extraction still flickers: either the composite ignores our texture
+  or the alpha estimate is bad. Undecidable from this data — v4.4 ships
+  `XeSSSynthDebugTint=1` (magenta layer) to decide in one session.
+- **Menu F9 opened and self-closed** (this is why the multiplier "menu doesn't
+  work"): `hotkey: ... poll` → `menu: open` (+72.627) → `menu input: menu key
+  F9 observed in game queue` (+72.636, 9 ms later — the same physical press)
+  → `menu: close`. The dedup only blocked the poll path after a queue toggle,
+  not the queue path after a poll toggle. Fixed in v4.4 (both directions) with
+  `dedup=` printed on every observed press.
+- **Multiplier hard-ceiling proven**: 23:48 session ran with `DLSSGFrames=2
+  (x3)` in the config line, creation line `maxInterpolations=3`, and the
+  `displayed=` histogram over the whole session: `displayed=1`×37,
+  `displayed=2`×11 — never 3. Swapchain was created with
+  maxInterpolatedFrames=1 hardcoded; SetInterpolations cannot exceed the
+  creation cap. v4.4 creates at `sdk.MaxInterpolations()` and logs
+  `createdInterp=` + `XeSS interpolation target set:`.
+- Residual matcher note: boot-transient `lastReject=5` at ~+0 s (78 ms,
+  harmless) and one `lastReject=2` (extent) per wheel-open — RDR2's wheel
+  variant changes render extent; refusing to stale-match is by-design. Noted
+  for the matcher; not relaxed.
+- Session inventory: 23:43 mode 3 (previous.log of coleta-235027), 23:48 mode 4
+  (shared log between the two zips), 23:51 mode 1. All three zips uploaded.

@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Regenera RDR2-Vulkan-FG/src/ui_diff_spv.h a partir de src/ui_diff.comp.
-# Pré: tools/glslang/glslangValidator (KhronosGroup/glslang release 16.6.0,
-# asset linux-x86_64-release) instalado no workspace.
+# Regenerates RDR2-Vulkan-FG/src/ui_diff_spv.h from src/ui_diff.comp.
+# Prerequisite: tools/glslang/glslangValidator (KhronosGroup/glslang release 16.6.0,
+# linux-x86_64-release asset) installed in the workspace.
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$SCRIPT_DIR/../../../RDR2-Vulkan-FG" && pwd)"
 GLSLANG="${GLSLANG:-$SCRIPT_DIR/../../../tools/glslang/glslangValidator}"
-[ -x "$GLSLANG" ] || { echo "glslang não encontrado em $GLSLANG"; exit 1; }
+[ -x "$GLSLANG" ] || { echo "glslang not found at $GLSLANG"; exit 1; }
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 "$GLSLANG" -V "$ROOT/src/ui_diff.comp" -e main -o "$TMP/ui_diff.spv" >/dev/null
@@ -22,5 +22,5 @@ lines += ['  ' + ', '.join('0x%08xu' % x for x in w[i:i+8]) + ',' for i in range
 lines += ['};', 'static constexpr size_t UiDiffSpirvSize = sizeof(UiDiffSpirv);', '}', '']
 out = root / 'src' / 'ui_diff_spv.h'
 out.write_text('\n'.join(lines))
-print(f'{out} ({len(w)} palavras SPIR-V)')
+print(f'{out} ({len(w)} SPIR-V words)')
 EOF
