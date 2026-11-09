@@ -1,6 +1,6 @@
-# RDR2 Vulkan FG — build `0.82+hudfield-v4.5` (B390 + OptiScaler)
+# RDR2 Vulkan FG — build `0.82+hudfield-v4.6` (B390 + OptiScaler)
 
-> Look for the tag **`hudfield-v4.5`** on the first lines of `RDR2VulkanFG.log`.
+> Look for the tag **`hudfield-v4.6`** on the first lines of `RDR2VulkanFG.log`.
 > If it does not appear, the old `.asi` is still the one in use.
 
 **What this build is:** the 0.82 base of the original project (public source,
@@ -14,7 +14,38 @@ OptiScaler (~36 real fps → ~72 displayed at 3440x1440). The 2026-11-08 session
 also proved the fork's synthetic-UI pipeline runs end-to-end on the card
 (`armed → first frame` in the log, zero errors).
 
-## What changed in v4.5 (diagnostics for the two open mysteries — not fixes yet)
+## What changed in v4.6 (new UI alpha estimator, validated offline before shipping)
+
+Your correction ("it was only the wheel/minimap, blinking magenta ↔ white")
+replaced my wrong reading with a much better one: white = the game's real UI
+(real frames), magenta = our synthetic UI (generated frames) — mode 3's flicker
+IS the real-vs-synthetic mismatch. So v4.6 rewrites the alpha estimate before
+asking you for another field minute. What is new:
+
+1. **Estimator replaced** (in `ui_diff.comp`): the old `max channel delta ×2`
+   heuristic is gone. It is now a two-sided unmix of `B = a·U + (1−a)·C` —
+   white-UI model `(B−C)/(1−C)` and dark-UI model `(C−B)/C`, max per pixel,
+   after a noise deadband (0.012 ≈ one σ of tone-map grain) with floors where
+   the unmix is ill-conditioned. The old heuristic did not see dark UI at all
+   (dark HUD blocks were alpha≈0) and leaked grain everywhere else.
+2. **Validated offline first**: `tools/sim-ui-estimator.py` builds a synthetic
+   scene with ground truth (wheel ring with AA edges, minimap, translucent
+   panel, dark block), per-frame independent capture noise on both inputs, and
+   scores variants. Winner vs the old heuristic: UI coverage error −66%,
+   background leak −29%, EMA'd UI flicker −21%, and opaque-UI centers land
+   ~2× closer to α=1 — where the generated frame reproduces the real one
+   *exactly and cannot flicker*. Honest limit: it is a synthetic scene
+   simulated in pure Python, not RDR2 and not the real GPU path; the field
+   still decides.
+3. **x3 status unchanged and honest**: v4.6 does NOT make x3 work; v4.5's
+   pacing forensics (`reject detail`, unbound-batch breadcrumb, `interp=`)
+   ride along and answer why in the same session as everything else.
+
+**One session now covers everything** — see `FIELD-TEST-B390.md`: one INI,
+about 5 minutes, and it answers x3's cause, the new estimator's look, and the
+mismatch mechanism together.
+
+## What changed in v4.5 (diagnostics for the two open mysteries — all ride along in v4.6)
 
 Your 09/11 noon session ran v4.4 (x3 INI + tint + menu) and solved one question
 and narrowed the other:
@@ -173,7 +204,7 @@ flips.
 
 ## Installation (one file swap)
 
-1. Game closed. Rename the current `.asi` (v4.4) to `RDR2VulkanFG.asi.v44.bak` — rollback.
+1. Game closed. Rename the current `.asi` (v4.5) to `RDR2VulkanFG.asi.v45.bak` — rollback.
 2. Copy this `RDR2VulkanFG.asi` into the game folder. The optional collector goes
    to `RDR2VulkanFG\RDR2VulkanFGDiagnostics.dll` (subfolder, as before).
 3. In `RDR2VulkanFG.ini`, keep:
@@ -186,27 +217,21 @@ flips.
    `DLSSGFrames=3` (4x) — the menu Multiplier should work now (MenuKey per INI),
    but the INI path is the trusted one.
 
-## Test grid v2 (each row = one INI + one game session)
+## Field protocol v3: ONE consolidated session (replaces the old test grid)
 
-Because previous results were confounded by the FG drops, re-establish the
-ground truth. After **every** game session (game closed), double-click
-`collect-once.bat` and rename the zip (`coleta-<name>.zip`) — the script now
-grabs ALL rotated logs, and only the last session lands in a zip if you skip it.
+You said it straight — no time for a research expedition — so v4.6 folds every
+open question into a single ~5-minute run: one INI (x3 + mode 3 + tint), one
+route (play → wheel → FG-off → wheel again), one `collect-once.bat`. The
+pacing diagnostics fire silently in that same session; the tint route judges
+the new estimator; the FG-off step confirms the mismatch mechanism. Exact
+steps and INI: **`FIELD-TEST-B390.md`** in this zip. After the run, if you
+want the game back to the comfortable daily driver, delete the diagnostic
+lines and go back to mode 1 defaults (`FGProvider=XeSS` + `DebugLogging=0`).
 
-| INI config | Expectation |
-|---|---|
-| *(default — nothing extra)* mode 1 | no wheel flicker (mode 1 baseline); FG flips should be far fewer than before — count `eligible=1` vs `eligible=0` windows in the log |
-| `XeSSUiMode=4` | author default; wheel flicker expected (known Intel extraction weakness) — control row |
-| `XeSSSynthUI=1` + `XeSSUiMode=3` | **the primary v4.3 experiment**: no backbuffer extraction at all; wheel comes only from the smoothed synthetic layer. Check `XeSS synthetic UI armed`, `uiMode=3`, `Synthetic UI layer first frame ... smoothing=1` lines — and judge only during long `eligible=1` stretches |
-| `XeSSSynthUI=1` + `XeSSUiMode=3` + `XeSSSynthSmooth=0` | ablation row: same as above without temporal smoothing. If THIS flickers and the row above does not, smoothing is what fixes it — keep it |
-| `XeSSSynthUI=1` + `XeSSUiMode=5` | kept for reference: on 08/11 night it flickered **with FG proven on** (extraction refinement on top); expect no better than mode 3 |
-| `DLSSGFrames=2` (+ anything above) | **TESTE 6, v4.5 diagnostics run**: `interp=2` vs `displayed=2` separates our side from the SDK's; the new `reject detail` and `SDK batch observed unbound` lines tell us why x3 clamps. Expect it to still display x2 — that is data, not failure |
-| `XeSSSynthUI=1` + `XeSSUiMode=3` + `XeSSSynthDebugTint=1` | **TESTE 5d** (5c already answered: the UI blinks magenta↔white = consumed, per-frame mismatch): wheel open, then **FG off via numpad `*`** — the blinking must stop (pure white). Characterizes what the next estimator rewrite has to match |
-| `XeSSUiComposition=0` | only meaningful with modes 2–5 (mode 1 already has composition off); expected WORSE — HUD vanishes from generated frames; revert immediately |
-
-Rules: one variable per session; verify the creation line
-`... uiMode=%u uiComposition=%d` in the log matches what you set; the
-`hudfield-v4.5` tag must appear.
+Rules that still hold: the `hudfield-v4.6` tag must appear at the top of the
+log; verify the creation line `... uiMode=%u uiComposition=%d` matches what
+you set; always run `collect-once.bat` after closing the game (only the last
+session lands in a zip if you skip it).
 
 ## Honest notes
 
@@ -221,14 +246,17 @@ Rules: one variable per session; verify the creation line
   `HUD-less miss start ... lastReject=N` lines show `5` (loadOp) or `6`
   (UNDEFINED layout) during normal gameplay, the remaining stalls are matcher
   strictness by design — report the code, and the next step is known.
-- Synthetic UI alpha is an estimate (`max channel delta ×2`, clamped) — on
-  08/11 night mode 5 + raw layer flickered with FG on, so the estimate is real
-  work in progress; v4.3's temporal EMA (`XeSSSynthSmooth=35` default) is the
-  first countermeasure and mode 3 (no extraction) is its fair stage. Edge
-  quality still needs eyes. With `XeSSSynthUI=0` (default) nothing of it is
-  allocated.
+- Synthetic UI alpha is an estimate — v4.6 replaced `max channel delta ×2`
+  with the two-sided unmix described at the top (offline-validated in
+  `tools/sim-ui-estimator.py`: −66% UI coverage error, −29% background leak
+  on a synthetic ground-truth scene with capture noise). It is still an
+  estimate: the 08/11 night sessions and the 09/11 tint blink prove the field
+  flickers, and only the B390 decides how much the new math wins. Temporal
+  EMA (`XeSSSynthSmooth=35` default) and mode 3 (no extraction) stay on top.
+  Edge quality still needs eyes. With `XeSSSynthUI=0` (default) nothing of it
+  is allocated.
 
 ## Rollback
 
-Game closed → delete this `.asi` → rename `RDR2VulkanFG.asi.v44.bak` back. The
+Game closed → delete this `.asi` → rename `RDR2VulkanFG.asi.v45.bak` back. The
 `zz_ngxbridge` shim is untouched.

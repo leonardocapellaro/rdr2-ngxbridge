@@ -1,181 +1,85 @@
-# B390 field test — package v4.5 (log tag: `hudfield-v4.5`)
+# B390 field test — package v4.6 (log tag: `hudfield-v4.6`)
 
-Run ONE config per game session. After EVERY session: close the game, then
-double-click `collect-once.bat` (it grabs ALL logs now — if you only run it at
-the end, only the last session ever lands in a zip).
+**v4.6 changed the plan: ONE session, about 5 minutes.** Earlier packages
+needed a test per question; this single run answers all three open questions
+together (why x3 clamps, how the new UI estimator looks, what the real-vs-
+synthetic blink mechanism is). One INI, one route, one zip.
 
-## Before anything (once, game closed)
+## Install (once, game closed)
 
-1. On the B390 PC, download the zip from the release:
+1. Download the zip from the release:
    https://github.com/leonardocapellaro/RDR2-Vulkan-FG/releases/latest
    Extract anywhere (e.g. `Downloads\hudfield`).
-2. In the game folder: rename `RDR2VulkanFG.asi` → `RDR2VulkanFG.asi.v44.bak`.
-3. Copy the package's `RDR2VulkanFG.asi` into the game folder; the
+2. In the game folder: rename `RDR2VulkanFG.asi` → `RDR2VulkanFG.asi.v45.bak`.
+3. Copy this package's `RDR2VulkanFG.asi` into the game folder; the
    `RDR2VulkanFGDiagnostics.dll` goes into the game folder's `RDR2VulkanFG\` subfolder.
-4. Open `RDR2VulkanFG.ini` (next to the `.asi`) and make sure the TEST 1 block
-   below is in place (it is basically the old baseline minus the v5 knobs).
+4. Replace the `[fgvk]` section of `RDR2VulkanFG.ini` with exactly this:
 
-Log path, always: `<game folder>\RDR2VulkanFG.log`. Every session starts with
-`... RDR2 Vulkan FG 0.82+hudfield-v4.5 ...` — if that line is missing, the new
-`.asi` is not the one running.
-
-## How to run each test (repeat for every test)
-
-- Game open, character in the world (not the main menu). 2–3 min of gameplay.
-- Follow the test's ROUTE (below).
-- Close the game. Double-click `collect-once.bat`.
-- Rename the generated zip after the test: `coleta-BASE.zip`, `coleta-MODE4.zip`, …
-
-Then send me the zips (or the paths).
-
----
-
-## TEST 1 — DEFAULT BASELINE (mode 1, everything on defaults)
-
-INI `[fgvk]`:
 ```ini
+[fgvk]
 FGProvider=XeSS
-DebugLogging=0
-```
-(remove or comment `XeSSUiMode`, `XeSSSynthUI`, `XeSSUiComposition`)
-
-ROUTE: play 2–3 min world → open the weapon wheel ~10 s → close → keep playing.
-Then answer:
-- a) Did the wheel flicker? (mode 1 expectation: NO)
-- b) Open the log, search `eligible=`. Count how many ON/OFF flips and the
-  longest `eligible=1` stretch. Expected on v4.2: far fewer flips than the
-  11/08 session, and `HUD-less miss start` lines should be rare — if present,
-  note their `lastReject=` number.
-- c) Stutter check: any stutter you feel should line up with an `eligible=0`
-  window in the log times.
-
-Send: `coleta-BASE.zip`
-
-## TEST 2 — MENU + MULTIPLIER (v4.4: the self-close bug is fixed)
-
-Keep the same INI as TEST 1.
-ROUTE: in-world, press the MenuKey (in your INI: `MenuKey=0x78` = **F9**).
-- a) Search the log for `menu: open`. On v4.2/v4.3 the menu opened and a second
-  later the same physical press re-entered through the game's queue and closed
-  it again (`menu: open` immediately followed by `menu: close`, ~9 ms apart).
-  With v4.4 that must NOT happen — one press = one toggle, and every key line
-  now carries `dedup=0/1`. Press once to open, again to close: you should see
-  exactly one open and one close.
-- b) With the overlay open (it should STAY open now): switch Multiplier to 4x,
-  watch ShowFPS (`displayed` goes toward 4×, and the log prints
-  `XeSS interpolation target set: x4 ...`). If it does not open: send the log
-  anyway — the proof line tells us where the key died.
-- c) FG toggle hotkey note: per INI, `KeyToggleFG=0x6A` is **numpad `***` (not
-  F6), and `KeyCycleFrames=0x23` is **End** (not Tab) — the labels in some older
-  notes were wrong.
-
-Send: `coleta-MENU.zip`
-
-## TEST 3 — MULTIPLIER VIA INI (v4.4: this is now REAL, was silently capped at x2)
-
-Your 08/11 session proved the old build created the swapchain at 1 interpolated
-frame regardless of INI/menu — `DLSSGFrames=2 (x3)` was read but `displayed` was
-stuck at 2 forever. v4.4 creates the swapchain at the SDK max. Game closed, INI
-`DLSSGFrames=2` → play 2 min → `collect-once.bat` → `coleta-3X.zip`. Verify in
-the log, in order: `createdInterp=3` (creation line), `XeSS interpolation target
-set: x3 ...`, then telemetry `displayed=3`. Expect ~3× displayed fps; FG on
-~most of the time per TEST 1's method.
-
-## TEST 4 — MODE 4 CONTROL (the flicker reference)
-
-INI add: `XeSSUiMode=4`. ROUTE: weapon wheel 10 s.
-Expected: flicker returns (known Intel extraction weakness) — this row calibrates
-the comparison. Note the `uiMode=4` creation line.
-
-Send: `coleta-MODE4.zip`
-
-## TEST 5 — SYNTHETIC UI + MODE 3 (re-run for the record; v4.4 changes nothing here)
-
-The 08/11 night re-run was VALID this time (FG on continuously ~105 s) and the
-wheel still flickered — so re-running TEST 5 only matters if you want a second
-sample. **Do TEST 5c first**: it decides WHICH component is flickering before
-any more estimator work is worth it.
-
-INI add:
-```ini
+DLSSGFrames=2
 XeSSSynthUI=1
 XeSSUiMode=3
+XeSSSynthDebugTint=1
+DebugLogging=0
 ```
-(`XeSSSynthSmooth=35` is the default; leave it alone unless doing TEST 5b.)
 
-ROUTE: play 2–3 min → weapon wheel ~15 s → observe.
-The log decides before your eyes do — check first:
-- `XeSS synthetic UI armed` + `uiMode=3` in the creation lines,
-- `Synthetic UI layer first frame: 3440x1440 ... smoothing=1` (pipeline ran,
-  EMA on),
-- **before opening the wheel**, search `eligible=1` — only judge the wheel while
-  FG is on (long ON stretches; if you were mostly `eligible=0`, the verdict does
-  not count — that is what burned TEST 5 on 08/11 night... and note FG then took
-  ~85 s to first activate: the wheel test belongs to the `enabled=1` window).
+   (`DLSSGFrames=2` = x3 multiplier; `XeSSSynthDebugTint=1` paints our
+   synthetic UI magenta — it is a diagnostic knob, delete it later.)
 
-Verdicts to report: wheel flicker (none/light-halo/same-as-mode-4), and any UI
-ghosting or smear when the wheel appears/vanishes (EMA ramp is ~2–3 frames).
+5. Game open, character in the world. The log
+   (`<game folder>\RDR2VulkanFG.log`) must start with
+   `... RDR2 Vulkan FG 0.82+hudfield-v4.6 ...` — if that tag is missing, the
+   old `.asi` is still running; stop and redo step 2/3.
 
-Send: `coleta-MODE3.zip`
+## ROUTE (~5 minutes, in order)
 
-## TEST 5b — OPTIONAL ABLATION (only if TEST 5 looked good)
+1. **Play 2–3 min normally.** The x3 diagnostics run silently in the
+   background — no action needed. The log lines we read afterwards are listed
+   below; there is nothing to judge with your eyes here.
+2. **Weapon wheel open ~15 s, look at it.** This is the new estimator's debut
+   (tint on = our layer is magenta). Report, in plain words, what you see:
+   - Is the blink between magenta and white still there? Steadier or worse
+     than last time? (New estimator: opaque UI centers should now be solid
+     magenta most of the time — the flicker should shrink toward the ring
+     edges; if it looks identical to before, say so — that is also an answer.)
+   - Anything magenta that is NOT UI, or UI that never turns magenta?
+3. **Still with the wheel open: press the FG hotkey (numpad `*`) to turn FG
+   OFF, hold ~15 s.** Expected: blinking STOPS, UI goes pure white/real.
+   If the UI keeps blinking with FG off, note it — that would mean something
+   else composites too.
+4. **FG back ON (numpad `*`), then open/close the wheel 3 times fast.**
+   Does magenta appear with a delay or leave ghosts when the wheel vanishes?
+   (The EMA smoothing ramps in ~2–3 frames; a visible smear/ghost is worth
+   a word.)
+5. Close the game. Double-click `collect-once.bat`. Rename the zip to
+   `coleta-V46.zip` and send it (or tell me the path).
 
-Same as TEST 5 plus `XeSSSynthSmooth=0`. If THIS flickers and TEST 5 did not,
-smoothing is proven as the working mechanism. Skip if TEST 5 was a clear win or
-clear fail. Send: `coleta-MODE3NOSMOOTH.zip`.
+## What the log will tell me (no action needed — just don't skip the collect)
 
-## TEST 5c — ANSWERED 09/11 (corrected): the UI blinks MAGENTA ↔ WHITE
-
-With tint in mode 3, the wheel/minimap blink between magenta and white.
-Meaning: our layer IS composited (magenta is ours), it IS UI-localized
-(good), and the white is the game's real UI on the real frames — so mode 3's
-flicker has always been the mismatch between the real UI and our estimated
-UI, frame-alternating. TEST 5c no longer needs running; 5d characterizes it.
-
-## TEST 5d — CHARACTERIZE THE MISMATCH (tint stays on)
-
-Same INI as TEST 5 (`XeSSSynthUI=1 XeSSUiMode=3 XeSSSynthDebugTint=1`).
-ROUTE (one session, in order):
-1. FG ON, wheel open ~15 s: confirm magenta/white alternation on the UI.
-   Note anything magenta that ISN'T UI, or UI that never turns magenta.
-2. **FG OFF** via the hotkey (numpad `*`) with the wheel still open ~15 s:
-   everything should be pure white/real — the blinking must STOP. If it does
-   not, something else composites too and that goes in the log for us.
-3. FG ON again, then open/close the wheel 3 times quickly: does the magenta
-   appear with a delay or leave ghosts when the UI vanishes? (EMA ~2–3 frames)
-
-Send: `coleta-TINTMISMATCH.zip`
-
-## TEST 6 — x3 DIAGNOSTICS RUN (expect x2 displayed; the LINES are the point)
-
-INI `DLSSGFrames=2` + normal gameplay 2–3 min. Search the log for, in order:
-- `XeSS interpolation target set: x3` (ours — should be there) and telemetry
-  `interp=2` (ours) vs `displayed=2` (the SDK's) — confirms the clamp is SDK-side;
-- `XeSS output pacing: reject detail magicOk=... flagsIntel=? flagsHardware=? flagsSoftware=?` —
-  the exact values the software pacer rejected on; this drives the next change;
+- `interp=2` vs `displayed=2` in telemetry — x3 requested (ours: `XeSS
+  interpolation target set: x3` should be there), still x2 displayed:
+  confirms again the clamp is SDK-side, not ours.
+- `XeSS output pacing: reject detail ...` — the exact values the software
+  pacer rejects on (which stage, and the presenter's mode flags). This line
+  drives the next change for x3.
 - `XeSS output pacing: SDK batch observed unbound; outputs=?` — if this line
-  appears at all, the stock SDK IS scheduling multi-output batches and the
-  clamp is elsewhere. Whether it appears or not is the answer.
+  appears AT ALL, the stock SDK already schedules multi-output batches and
+  the clamp is elsewhere. Its absence is equally an answer.
+- The tint route (steps 2–4) characterizes the real-vs-synthetic mismatch the
+  new estimator has to shrink: blinking stops with FG off = mechanism
+  confirmed; the step-2 description tells us how much the new estimator
+  already won.
 
-Send: `coleta-X3DIAG.zip`
+## If something goes sideways
 
----
-
-## What each answer unlocks
-
-- TEST 5d blinking STOPS with FG off → real-vs-synthetic UI mismatch
-  confirmed; the next commit replaces the `max delta ×2` alpha estimate with
-  a proper per-pixel unmix and we finally chase mode 3 for real.
-- TEST 5d magenta on non-UI areas, UI never magenta, or blinking continues
-  with FG off → different compositing story than assumed; the zip's log +
-  your description decides what that means.
-- TEST 6 reject-detail `flagsSoftware=0` (or another mismatch) → we know the
-  presenter mode the field SDK actually uses; the pacer gets a verified
-  contract for it (or a documented "cannot bind on this SDK" statement).
-- TEST 6 shows `outputs>=3` unbound → the SDK does schedule more frames;
-  suspicion moves downstream (our present loop / pacing waits).
-- TEST 2 menu still self-closes (`open`+`close` pair) despite the fix → send
-  log; the `dedup=` lines localize it precisely.
-- Frequent `HUD-less miss start ... lastReject=5/6` during normal play → matcher
-  strictness is the remaining limiter (known; next patch target). `lastReject=2`
-  only at the moment the wheel opens is the expected extent-change behavior.
+- No `hudfield-v4.6` tag → old `.asi` in use; redo the rename.
+- FG never reaches `eligible=1`/`enabled=1` (telemetry line every ~2 s) →
+  just collect and send; the log localizes it (this INI is a diagnostic
+  config, not the daily driver — if you want to keep playing meanwhile, revert
+  to mode 1 defaults after the run).
+- Anything magenta outside the UI, white UI that never tints, blinking
+  surviving FG off, or a crash mid-route → still run `collect-once.bat`,
+  send the zip, and add one line about what you saw. Field observation wins;
+  describe it your way, I'll match it to the log.

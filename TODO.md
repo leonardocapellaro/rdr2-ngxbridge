@@ -35,8 +35,9 @@ single 1-minute gameplay capture answer the question by itself.
       without pacing queues) never bound; x2 works without it, x3 evidently
       doesn't. v4.5 ships `reject detail` (witness stage + presenter mode
       flags) + the unbound-batch breadcrumb + `interp=` telemetry.
-- [ ] Next session (TESTE 6): the reject-detail line picks the pacer change;
-      the breadcrumb line (present or absent) localizes the clamp.
+- [ ] Next session (consolidated v4.6 run replaces standalone TESTE 6): the
+      reject-detail line picks the pacer change; the breadcrumb line (present
+      or absent) localizes the clamp — both fire silently inside the one run.
 
 ## P2 — Synthetic UI (XeSSSynthUI) validation — ITERATION 2 IN v4.3
 - [x] v4.1 executed the pipeline end-to-end on hardware (armed + first-frame,
@@ -57,12 +58,17 @@ single 1-minute gameplay capture answer the question by itself.
       real frames) alternating with synthetic UI (magenta, on generated
       frames) — a coverage/edges mismatch problem, not noise, not alignment
       (that hypothesis died with the correction).
-- [ ] TESTE 5d (next session): FG-off ablation (numpad `*`) with the wheel
-      open — blinking must stop (pure white) to confirm the real-vs-generated
-      read; plus quick open/close x3 for ghosting (EMA ramp).
-- [ ] Next code step after 5d confirms: replace the `max channel delta ×2`
-      alpha heuristic with a per-pixel unmix of `B = a·U + (1−a)·C`
-      (clamped normalized luminance-delta estimate), keep EMA on top.
+- [ ] 5d folded into the consolidated v4.6 session (step 3: FG-off with the
+      wheel open — blinking must stop, pure white — plus step 4 quick
+      open/close x3 for ghosting). One run, no standalone session.
+- [x] SHIPPED EARLY in v4.6 (user directive: do not gate code on more field
+      time; validate with local mocks instead): replaced `max channel delta ×2`
+      with the two-sided per-pixel unmix of `B = a·U + (1−a)·C` —
+      white model `(B−C)/(1−C)`, dark model `(C−B)/C`, per-pixel max, 0.012
+      deadband, 0.15 floors. Offline-validated in `tools/sim-ui-estimator.py`
+      vs synthetic ground truth: mae_ui 0.5569→0.1939, leak 0.0135→0.0096,
+      EMA'd UI flicker 0.0133→0.0105, center bias halved. Field validation
+      (consolidated session steps 2–4) still pending.
 - [ ] Optional: UI coverage/alpha stats via small readback so a future log
       proves the layer's content quality without eyes-on.
 

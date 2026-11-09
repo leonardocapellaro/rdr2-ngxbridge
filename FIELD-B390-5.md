@@ -141,3 +141,44 @@ v4.4 (`createdInterp=3` present):
   multi-frame batches) to finish the localization in one more session.
 - v4.5 also makes `SetInterpolations` edge-only (was every present — Intel perf
   note; also was resetting the cadence estimator each frame).
+
+## Addendum 4 — v4.6: estimator rewritten offline (09/11 afternoon, no field time used)
+
+User directive after the v4.5 checklist: *"já faz tudo junto, não tenho tempo
+pra ficar pesquisando isso por fora.. ou voce mesmo faça testes com mocks aí
+locais"* → stop gating code on field sessions; validate locally, ship, and
+fold every open question into ONE field run.
+
+**Mock testing done**: `tools/sim-ui-estimator.py` (pure Python, stdlib — no
+numpy installed here) renders a synthetic scene with ground truth (weapon-wheel
+ring with 1px AA, minimap, translucent panel, dark UI block), composites
+`B = a0·U + (1−a0)·C` with per-frame independent σ=0.012 noise on BOTH captures
+(two reads of the same world carry independent tone-map grain — that is the
+adversary), scores estimator variants on exactly the field-visible quantities.
+Final-scene numbers (60 frames):
+
+| variant | mae_ui | edge_rmse | center_bias | leak_bg | ema_bg | ema_ui |
+|---|---|---|---|---|---|---|
+| V0 current (`max delta ×2`) | 0.5569 | 0.4307 | −0.2688 | 0.0135 | 0.0088 | 0.0133 |
+| **V6 two-sided (shipped v4.6)** | **0.1939** | **0.1725** | **−0.1295** | **0.0096** | **0.0065** | **0.0105** |
+
+(Also tried V5 = one-sided + deadband: leak/ema best of all — 0.0019–0.0057 —
+but mae_ui stays ~0.50, i.e. it fixes noise while still missing all dark UI;
+coverage is the bigger field-visible defect, so V6 wins overall.)
+
+(V6: `dup=max(B−C)−0.012 over max(1−cmax,0.15)`, `ddn=max(C−B)−0.012 over
+max(cmax,0.15)`, a=clamp(max(dup_a,ddn_a)) — white-UI and dark-UI unmix models
+maxed per pixel; deadband ≈ 1σ of noise.) Why V0 loses: alpha≈0 on the dark UI
+block (dark UI coverage simply missed) and ×2 amplifies grain into the
+background. Where it matters most: opaque centers push to a=1, where the
+generated frame reproduces B exactly and cannot flicker.
+
+Honest limits: synthetic scene, CPU-simulated, not RDR2, not the real GPU
+tonemap chain; it picked the estimator, the field still judges it.
+
+**v4.6 = v4.5 + the new estimator** (`ui_diff.comp` regenerated into
+`ui_diff_spv.h`, banner `hudfield-v4.6`). x3 untouched; the v4.5 diagnostics
+lines fire in the same run. **FIELD-TEST-B390.md v4.6 replaces the whole test
+grid with ONE ~5-minute session** (x3 INI + mode 3 + tint; play → wheel →
+FG-off → wheel ×3 → collect-once). One zip answers x3's cause, the estimator's
+look, and the 5d mechanism question together.
